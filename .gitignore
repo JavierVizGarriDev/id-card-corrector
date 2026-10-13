@@ -1,0 +1,22 @@
+# Carpetas de datos del usuario (privacidad)
+entrada/
+salida/
+
+# Entorno virtual
+.venv/
+venv/
+
+# Caché de Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Entornos y editores
+.env
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
