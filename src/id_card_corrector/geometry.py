@@ -47,11 +47,11 @@ def _check_corners_shape(corners: np.ndarray) -> None:
     """Validate that `corners` is a numpy array with shape (4, 2).
 
     Raises:
-        ValueError: if `corners` is not a numpy array, or if its shape
-            is not (4, 2).
+        TypeError: if `corners` is not a numpy array.
+        ValueError: if its shape is not (4, 2).
     """
     if not isinstance(corners, np.ndarray):
-        raise ValueError(
+        raise TypeError(
             f"corners must be a numpy array, got {type(corners).__name__}"
         )
     if corners.shape != (4, 2):
@@ -59,27 +59,16 @@ def _check_corners_shape(corners: np.ndarray) -> None:
             f"corners must have shape (4, 2), got {corners.shape}"
         )
 
-    
-def _polygon_area(corners: np.ndarray) -> float:
-    """Return the (unsigned) area of the quadrilateral in square pixels.
 
-    Uses the shoelace formula. The signed result is converted to absolute
-    value, so the order of the points (clockwise or counter-clockwise)
-    does not matter.
-    """
-    xs = corners[:, 0]
-    ys = corners[:, 1]
-    xs_next = np.roll(xs, -1)
-    ys_next = np.roll(ys, -1)
-    cross = xs * ys_next - xs_next * ys
-    return float(0.5 * abs(cross.sum()))
-
-
-def _cross_product_2d(p1: np.ndarray, p2: np.ndarray, p3: np.ndarray) -> float:
+def _cross_product_2d(
+    p1: np.ndarray,
+    p2: np.ndarray,
+    p3: np.ndarray,
+) -> float:
     """Return the 2D cross product of vectors (p2 - p1) and (p3 - p1).
 
-    The sign of the result indicates which side of the line p1->p2
-    the point p3 lies on:
+    The sign of the result indicates which side of the line p1->p2 the
+    point p3 lies on:
       - Positive: p3 is to the left.
       - Negative: p3 is to the right.
       - Zero: p3 is collinear with p1 and p2.
@@ -108,14 +97,19 @@ def _segments_intersect(
     return (d1 * d2 < 0) and (d3 * d4 < 0)
 
 
-def _is_self_intersecting(corners: np.ndarray) -> bool:
-    """Return True if the quadrilateral's opposite sides cross each other.
+def _polygon_area(corners: np.ndarray) -> float:
+    """Return the (unsigned) area of the quadrilateral in square pixels.
 
-    A self-intersecting quadrilateral indicates the points were marked
-    in the wrong order.
+    Uses the shoelace formula. The signed result is converted to absolute
+    value, so the order of the points (clockwise or counter-clockwise)
+    does not matter.
     """
-    p0, p1, p2, p3 = corners
-    return _segments_intersect(p0, p1, p2, p3) or _segments_intersect(p1, p2, p3, p0)
+    xs = corners[:, 0]
+    ys = corners[:, 1]
+    xs_next = np.roll(xs, -1)
+    ys_next = np.roll(ys, -1)
+    cross = xs * ys_next - xs_next * ys
+    return float(0.5 * abs(cross.sum()))
 
 
 def _side_lengths(corners: np.ndarray) -> np.ndarray:
@@ -146,6 +140,19 @@ def _min_side_length(corners: np.ndarray) -> float:
     return float(_side_lengths(corners).min())
 
 
+def _is_self_intersecting(corners: np.ndarray) -> bool:
+    """Return True if the quadrilateral's opposite sides cross each other.
+
+    A self-intersecting quadrilateral indicates the points were marked
+    in the wrong order.
+    """
+    p0, p1, p2, p3 = corners
+    return (
+        _segments_intersect(p0, p1, p2, p3)
+        or _segments_intersect(p1, p2, p3, p0)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -153,11 +160,8 @@ def _min_side_length(corners: np.ndarray) -> float:
 def validate_quadrilateral(corners: np.ndarray) -> tuple[Issue, ...]:
     """Validate a quadrilateral before warping.
 
-    Self-intersection is checked first: if detected, it is returned
-    immediately without evaluating other rules, because the area
-    computed by the shoelace formula is misleading for self-intersecting
-    polygons (a symmetric bowtie, for example, yields area 0 even though
-    its lobes cover real surface).
+    Self-intersection is checked first and returned immediately, because
+    the shoelace formula is misleading for self-intersecting polygons.
 
     Args:
         corners: Array of shape (4, 2) with the four corner points.
@@ -167,6 +171,7 @@ def validate_quadrilateral(corners: np.ndarray) -> tuple[Issue, ...]:
         quadrilateral is fine.
 
     Raises:
+        TypeError: if `corners` is not a numpy array.
         ValueError: if `corners` does not have shape (4, 2).
         DegenerateQuadrilateralError: if the area is near zero and the
             perspective transformation would fail. Not raised for
@@ -175,10 +180,10 @@ def validate_quadrilateral(corners: np.ndarray) -> tuple[Issue, ...]:
     """
     _check_corners_shape(corners)
 
-    # Self-intersection must be checked before area: the shoelace
-    # formula assumes a simple polygon, and returns misleading values
-    # for self-intersecting ones. A symmetric bowtie, for example,
-    # yields area 0 even though its two lobes cover real surface.
+    # Self-intersection is checked before area: the shoelace formula
+    # assumes a simple polygon and returns misleading values for
+    # self-intersecting ones. A symmetric bowtie, for example, yields
+    # area 0 even though its lobes cover real surface.
     if _is_self_intersecting(corners):
         return (Issue.SELF_INTERSECTING,)
 
@@ -216,14 +221,15 @@ def warp_to_rectangle(
         The straightened image, of shape (height_px, width_px, 3).
 
     Raises:
+        TypeError: if `corners` is not a numpy array.
         ValueError: if `corners` does not have shape (4, 2), or if
-            `width_px` or `height_px` is not positive.
+            `width_px` or `height_px` is less than 2.
     """
     _check_corners_shape(corners)
 
-    if width_px <= 0 or height_px <= 0:
+    if width_px < 2 or height_px < 2:
         raise ValueError(
-            f"width_px and height_px must be positive, "
+            f"width_px and height_px must be at least 2, "
             f"got {width_px}x{height_px}"
         )
 
@@ -234,7 +240,8 @@ def warp_to_rectangle(
         [0, height_px - 1],
     ], dtype=np.float32)
 
-    matrix = cv2.getPerspectiveTransform(corners, destination)
+    corners_f32 = np.asarray(corners, dtype=np.float32)
+    matrix = cv2.getPerspectiveTransform(corners_f32, destination)
 
     # INTER_LANCZOS4 for high-quality resampling: the perspective
     # transformation resamples pixels, and Lanczos produces sharper
