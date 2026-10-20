@@ -43,8 +43,8 @@ def test_physical_spec_px_properties_return_int():
 
 def test_physical_spec_rejects_non_positive_dimensions_with_message():
     """Non-positive width or height is rejected with a clear message."""
-    with pytest.raises(ValueError, match="width_mm and height_mm must be positive"):
-        PhysicalSpec(width_mm=0, height_mm=50.0, dpi=300)
+    with pytest.raises(ValueError, match="width_mm must be positive, got 0"):
+        PhysicalSpec(width_mm=0, height_mm=50.0, dpi=300) 
 
 
 @pytest.mark.parametrize(

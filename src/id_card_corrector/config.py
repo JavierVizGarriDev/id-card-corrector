@@ -1,5 +1,6 @@
 """Physical specifications and layout constants."""
 
+import math
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final, Mapping
@@ -11,20 +12,44 @@ MM_PER_INCH: Final[float] = 25.4
 # Provisional value, to be adjusted visually once the first PDF is generated.
 MARGIN_MM: Final[float] = 8.47
 
+def _validate_positive_finite(name: str, value: int | float) -> None:
+    """Validate that a dimension is a finite positive number.
+    
+    Args:
+        name: Name of the field, used in error messages.
+        value: The value to validate.
+        
+    Raises:
+        TypeError: if `value` is not a number or is a bool.
+        ValueError: if `value` is not finite or is not positive.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(
+            f"{name} must be a number, got {type(value).__name__}: {value!r}"
+        )
+    if not math.isfinite(value):
+        raise ValueError(f"{name} must be finite, got {value}")
+    if value <= 0:
+        raise ValueError(f"{name} must be positive, got {value}")
+
 
 @dataclass(frozen=True)
 class PhysicalSpec:
-    """Physical dimensions and output resolution of a printable item."""
+    """Physical dimensions and output resolution of a printable item.
+
+    Raises:
+        TypeError: if any dimension is not a number or is a bool.
+        ValueError: if any dimension is not finite or is not positive.
+    """
 
     width_mm: float
     height_mm: float
     dpi: int
 
     def __post_init__(self) -> None:
-        if self.width_mm <= 0 or self.height_mm <= 0:
-            raise ValueError("width_mm and height_mm must be positive")
-        if self.dpi <= 0:
-            raise ValueError("dpi must be positive")
+        _validate_positive_finite("width_mm", self.width_mm)
+        _validate_positive_finite("height_mm", self.height_mm)
+        _validate_positive_finite("dpi", self.dpi)
 
     @property
     def width_px(self) -> int:
@@ -35,7 +60,7 @@ class PhysicalSpec:
     def height_px(self) -> int:
         """Height in pixels, derived from mm and DPI."""
         return round(self.height_mm / MM_PER_INCH * self.dpi)
-
+    
 
 @dataclass(frozen=True)
 class CardSpec(PhysicalSpec):
