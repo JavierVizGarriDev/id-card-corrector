@@ -210,8 +210,8 @@ def save_image(path: Path, image: np.ndarray, dpi: int | float) -> None:
     Image.fromarray(rgb).save(path, dpi=(dpi, dpi))
 
 
-def save_pdf(path: Path, image: np.ndarray, dpi: int | float) -> None:
-    """Save a single image as a one-page PDF, embedding the DPI.
+def save_pdf(path: Path, images: np.ndarray | list[np.ndarray], dpi: int | float) -> None:
+    """Save one or more images as a multi-page PDF, embedding the DPI.
 
     The physical page size is derived from the image dimensions and
     the DPI: width_px / dpi inches by height_px / dpi inches. For
@@ -221,27 +221,42 @@ def save_pdf(path: Path, image: np.ndarray, dpi: int | float) -> None:
     Args:
         path: Destination PDF file path. Must end in ".pdf"
             (case-insensitive).
-        image: BGR image of shape (H, W, 3) and dtype uint8.
+        images: A single BGR image or a list of BGR images. Each image
+            becomes one page in the PDF.
         dpi: Resolution to embed in the PDF metadata. Must be a
             positive number.
 
     Raises:
         TypeError: if `dpi` is not a number.
         ValueError: if the path does not end in ".pdf", if `dpi` is
-            not positive, or if `image` is not a 3-channel uint8 array.
-
-    Note:
-        Arguments are validated in this order: dpi, extension, image.
-        If multiple arguments are invalid, the first invalid one in
-        that order is the one reported. All validations happen before
-        any filesystem side effect.
-
-        Pillow also accepts a `dpi` tuple since version 9.5.0. We use
-        `resolution` because it is the historical parameter and takes
-        a scalar, keeping it consistent with `save_image`.
+            not positive, or if any image is not a 3-channel uint8 array.
     """
     _check_dpi(dpi)
     _check_extension(path, PDF_EXTENSIONS)
-    rgb = _to_rgb(image)
+    
+    # Normalize to list
+    if isinstance(images, np.ndarray):
+        images_list = [images]
+    else:
+        images_list = images
+        
+    if not images_list:
+        raise ValueError("At least one image is required to save a PDF.")
+
+    # Validate and convert all images
+    rgb_images = [_to_rgb(img) for img in images_list]
+    pil_images = [Image.fromarray(img) for img in rgb_images]
+
     ensure_directory(path.parent)
-    Image.fromarray(rgb).save(path, format="PDF", resolution=dpi)
+
+    # Save logic
+    if len(pil_images) == 1:
+        pil_images[0].save(path, format="PDF", resolution=dpi)
+    else:
+        pil_images[0].save(
+            path, 
+            format="PDF", 
+            resolution=dpi, 
+            save_all=True, 
+            append_images=pil_images[1:]
+        )
