@@ -419,36 +419,132 @@ def _show_issues_panel(image: np.ndarray, issues: tuple[Issue, ...]) -> str:
 
 def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
     """Run the interactive selection loop and return the 4 corners.
-    
+
     Args:
         image: The image to display.
         max_display: Max dimension for the window. The image is
             downscaled for display, but points are returned in the
             original image coordinates.
-            
+
     Returns:
         np.ndarray of shape (4, 2), dtype float32, in TL, TR, BR, BL order.
-        
+
     Raises:
         SelectionCancelledError: if the user cancels the selection.
     """
-    # TODO:
-    # 1. Setup display (resize if needed, calculate scale factor).
-    # 2. Create window and set mouse callback.
-    # 3. Initialize state = SelectorState(Phase.COLLECTING), points = []
-    # 4. Loop:
-    #    a. Draw points and banner.
-    #    b. cv2.imshow(window_name, display_image)
-    #    c. key = cv2.waitKey(20)
-    #    d. Translate key to event.
-    #    e. If ENTER in READY_TO_CONFIRM: run validate_quadrilateral first!
-    #       - If DegenerateQuadrilateralError: show error, restart.
-    #       - If issues: show_issues_panel. If restart, reset. If confirm, fall through.
-    #    f. state, action = process_event(state, event, len(points))
-    #    g. Execute action (ADD_POINT, RESET, CLOSE, etc.)
-    #    h. If action == CLOSE_ALL: raise SelectionCancelledError()
-    #    i. If action == CONFIRM: break loop.
-    # 5. cv2.destroyAllWindows()
-    # 6. Convert points to original coordinates (divide by scale).
-    # 7. Return np.array(points, dtype=np.float32)
-    ...
+    h, w = image.shape[:2]
+    
+    # 1. Setup display scaling
+    scale = min(1.0, max_display / max(h, w))
+    if scale < 1.0:
+        display_w, display_h = int(w * scale), int(h * scale)
+        display = cv2.resize(image, (display_w, display_h), interpolation=cv2.INTER_AREA)
+    else:
+        display = image.copy()
+        display_w, display_h = w, h
+
+    window_name = "Selector de esquinas"
+    cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
+    
+    # 2. State variables
+    state = SelectorState(Phase.COLLECTING)
+    points: list[tuple[int, int]] = []
+    pending_clicks: list[tuple[int, int]] = []
+
+    # 3. Mouse callback
+    def on_mouse(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            pending_clicks.append((x, y))
+
+    cv2.setMouseCallback(window_name, on_mouse)
+
+    try:
+        # 4. Main loop
+        while state.phase != Phase.CLOSED:
+            # A. Handle pending clicks (translate to event)
+            event = None
+            current_click = None
+            if pending_clicks:
+                click_x, click_y = pending_clicks.pop(0)
+                event = SelectionEvent.CLICK
+                current_click = (click_x, click_y)
+
+            # B. Handle keyboard
+            key = cv2.waitKey(20) & 0xFF
+            
+            # Check if window was closed via the 'X' button
+            if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+                raise SelectionCancelledError("Window closed by user.")
+                
+            if key == KEY_ENTER:
+                event = SelectionEvent.ENTER
+            elif key in (KEY_R_LOWER, KEY_R_UPPER):
+                event = SelectionEvent.RESTART
+            elif key == KEY_ESC:
+                event = SelectionEvent.CANCEL
+            # If key is 255 (no key pressed), we just keep the current event (if any)
+
+            # C. Pre-validation before ENTER
+            if event == SelectionEvent.ENTER and state.phase == Phase.READY_TO_CONFIRM:
+                original_points = [(int(x / scale), int(y / scale)) for x, y in points]
+                corners_array = np.array(original_points, dtype=np.float32)
+
+                try:
+                    issues = validate_quadrilateral(corners_array)
+                except DegenerateQuadrilateralError:
+                    temp_canvas = display.copy()
+                    cv2.putText(temp_canvas, "Area demasiado pequena. Reiniciando...", 
+                                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                    cv2.imshow(window_name, temp_canvas)
+                    cv2.waitKey(1500)
+                    event = SelectionEvent.RESTART
+                    issues = None
+
+                if issues:
+                    user_choice = _show_issues_panel(display, issues)
+                    if user_choice == "restart":
+                        event = SelectionEvent.RESTART
+                    # If "confirm", we fall through and let process_event(ENTER) handle it
+
+            # D. Process event (if any)
+            if event is not None:
+                try:
+                    state, action = process_event(state, event, len(points))
+                except ValueError as e:
+                    print(f"State machine error: {e}")
+                    event = None
+                    action = SelectionAction.NONE
+
+                # E. Execute action
+                if action == SelectionAction.ADD_POINT:
+                    if current_click:
+                        points.append(current_click)
+                elif action == SelectionAction.RESET_POINTS:
+                    points.clear()
+                    pending_clicks.clear()
+                elif action == SelectionAction.CLOSE_ALL:
+                    raise SelectionCancelledError("User cancelled the selection.")
+                elif action == SelectionAction.CONFIRM:
+                    break # Exit loop
+
+            # F. Render frame
+            canvas = display.copy()
+            if state.phase == Phase.WARNING:
+                _draw_warning_panel(canvas)
+            else:
+                _draw_points(canvas, points)
+                if state.phase == Phase.COLLECTING:
+                    banner_text = "Clic en sentido horario desde Sup.Izq | R: reiniciar | ESC: cancelar"
+                else: # READY_TO_CONFIRM
+                    banner_text = "Clic en sentido horario desde Sup.Izq | ENTER: confirmar | R: reiniciar | ESC: cancelar"
+                _draw_banner(canvas, banner_text)
+
+            cv2.imshow(window_name, canvas)
+            
+    finally:
+        # 5. Cleanup (always runs, even if an exception is raised)
+        cv2.destroyAllWindows()
+
+    # Convert to original image coordinates and return
+    original_points = [(int(x / scale), int(y / scale)) for x, y in points]
+    return np.array(original_points, dtype=np.float32)
