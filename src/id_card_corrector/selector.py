@@ -242,33 +242,179 @@ def process_event(
 # ---------------------------------------------------------------------------
 
 def _draw_banner(image: np.ndarray, text: str) -> None:
-    """Draw a semi-transparent banner at the bottom of the image."""
-    # TODO: use cv2.rectangle and cv2.addWeighted for transparency,
-    # then cv2.putText for the text.
-    ...
+    """Draw a semi-transparent banner at the bottom of the image.
+    
+    Modifies `image` in place. The banner is a black rectangle at
+    ~60% opacity, with white text on top. Height is fixed at 50px.
+    """
+    h, w = image.shape[:2]
+    banner_h = 50
+    y0 = h - banner_h
 
+    # Create a copy with a black rectangle over the banner area
+    overlay = image.copy()
+    cv2.rectangle(overlay, (0, y0), (w, h), (0, 0, 0), thickness=-1)
+
+    # Blend: overlay * alpha + image * (1 - alpha)
+    # Inside the banner: (1-alpha) of original remains (darker)
+    # Outside: (1-alpha)*image + alpha*image = image (no change)
+    alpha = 0.6
+    cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
+
+    # Draw the text
+    cv2.putText(
+        image,
+        text,
+        (10, h - 18),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (255, 255, 255),
+        1,
+        cv2.LINE_AA,
+    )
 
 def _draw_warning_panel(image: np.ndarray) -> None:
-    """Draw the warning panel over the image."""
-    # TODO: draw a darker overlay and the warning text.
-    ...
+    """Draw the warning panel over the image.
+    
+    Modifies `image` in place. The entire image is dimmed, and a
+    centered message with the three options is drawn on top.
+    """
+    h, w = image.shape[:2]
+
+    # Dim the entire image with a semi-transparent black overlay
+    overlay = np.zeros_like(image)
+    alpha = 0.7
+    cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
+
+    # Lines to display
+    lines = [
+        "¿Seguro que quieres cerrar?",
+        "Se perderá el progreso.",
+        "",
+        "ESC: cerrar todo  |  R: reiniciar  |  ENTER: continuar",
+    ]
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.7
+    font_thickness = 2
+    line_height = 35
+
+    # Calculate total height and starting y
+    total_h = line_height * len(lines)
+    y_start = (h - total_h) // 2 + 30  # +30 to account for text baseline
+
+    for i, line in enumerate(lines):
+        if not line:
+            continue
+        (text_w, text_h), _ = cv2.getTextSize(line, font, font_scale, font_thickness)
+        x = (w - text_w) // 2
+        y = y_start + i * line_height
+        cv2.putText(
+            image,
+            line,
+            (x, y),
+            font,
+            font_scale,
+            (255, 255, 255),
+            font_thickness,
+            cv2.LINE_AA,
+        )
 
 
 def _draw_points(image: np.ndarray, points: list[tuple[int, int]]) -> None:
-    """Draw circles and order numbers on the collected points."""
-    # TODO: iterate over points, draw cv2.circle and cv2.putText.
-    ...
-
+    """Draw numbered circles on the collected points.
+    
+    Modifies `image` in place. Each point gets a filled green circle
+    and its 1-based order number next to it.
+    """
+    for i, (x, y) in enumerate(points, start=1):
+        # Filled circle
+        cv2.circle(image, (x, y), radius=8, color=(0, 255, 0), thickness=-1)
+        
+        # Number offset up and to the right of the point
+        cv2.putText(
+            image,
+            str(i),
+            (x + 12, y - 8),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
 
 def _show_issues_panel(image: np.ndarray, issues: tuple[Issue, ...]) -> str:
     """Show a panel with the issues found and wait for ENTER or R.
     
+    Blocks until the user presses one of the relevant keys. Renders
+    the panel on a copy of the image (does not modify the input).
+    
+    Args:
+        image: The image to render the panel on.
+        issues: The issues reported by `validate_quadrilateral`.
+        
     Returns:
         "confirm" if the user presses ENTER, "restart" if R.
     """
-    # TODO: draw text explaining the issues, wait for key.
-    # Map ENTER to "confirm", R to "restart".
-    ...
+    # Mapping from Issue to a human-readable message
+    issue_messages = {
+        Issue.SELF_INTERSECTING: "Las esquinas están en orden incorrecto.",
+        Issue.EXTREME_ASPECT_RATIO: "La selección es demasiado alargada.",
+        Issue.TINY_SIDE: "Uno de los lados es demasiado pequeño.",
+    }
+
+    # Work on a copy to avoid mutating the caller's image
+    display = image.copy()
+    h, w = display.shape[:2]
+
+    # Dim the background
+    overlay = np.zeros_like(display)
+    alpha = 0.75
+    cv2.addWeighted(overlay, alpha, display, 1 - alpha, 0, display)
+
+    # Prepare the lines of text
+    lines = ["La selección tiene problemas:", ""]
+    for issue in issues:
+        lines.append(f"- {issue_messages[issue]}")
+    lines.append("")
+    lines.append("ENTER: continuar  |  R: reiniciar")
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.65
+    font_thickness = 2
+    line_height = 35
+
+    total_h = line_height * len(lines)
+    y_start = (h - total_h) // 2 + 30
+
+    for i, line in enumerate(lines):
+        if not line:
+            continue
+        # Use a slightly different color for the options line
+        color = (200, 200, 200) if line.startswith("ENTER") else (255, 255, 255)
+        (text_w, _), _ = cv2.getTextSize(line, font, font_scale, font_thickness)
+        x = (w - text_w) // 2
+        y = y_start + i * line_height
+        cv2.putText(
+            display,
+            line,
+            (x, y),
+            font,
+            font_scale,
+            color,
+            font_thickness,
+            cv2.LINE_AA,
+        )
+
+    # Blocking loop: wait for ENTER or R
+    while True:
+        cv2.imshow("Verificacion de esquinas", display)
+        key = cv2.waitKey(20) & 0xFF
+        if key == KEY_ENTER:
+            return "confirm"
+        if key in (KEY_R_LOWER, KEY_R_UPPER):
+            return "restart"
+        # Any other key: ignore and keep waiting
 
 
 def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
