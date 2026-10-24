@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pytest
 
@@ -23,6 +23,7 @@ def test_cli_defaults(mock_process):
     mock_process.assert_called_once_with(
         input_dir=Path("entrada"),
         output_dir=Path("salida"),
+        ui=ANY,  # <--- Añadido: ignoramos el objeto UI concreto
         card_type="CI",
         sheet_type="CARTA"
     )
@@ -40,6 +41,7 @@ def test_cli_custom_arguments(mock_process):
     mock_process.assert_called_once_with(
         input_dir=Path("my_input"),
         output_dir=Path("my_output"),
+        ui=ANY,  # <--- Añadido
         card_type="ONAT",
         sheet_type="A4"
     )

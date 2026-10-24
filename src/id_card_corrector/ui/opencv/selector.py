@@ -420,21 +420,13 @@ def _show_issues_panel(image: np.ndarray, issues: tuple[Issue, ...]) -> str:
 def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
     """Run the interactive selection loop and return the 4 corners.
 
-    Args:
-        image: The image to display.
-        max_display: Max dimension for the window. The image is
-            downscaled for display, but points are returned in the
-            original image coordinates.
-
-    Returns:
-        np.ndarray of shape (4, 2), dtype float32, in TL, TR, BR, BL order.
+    This function only handles the UI loop for clicks and keys.
+    It does NOT validate the quadrilateral; that is the pipeline's job.
 
     Raises:
         SelectionCancelledError: if the user cancels the selection.
     """
     h, w = image.shape[:2]
-    
-    # 1. Setup display scaling
     scale = min(1.0, max_display / max(h, w))
     if scale < 1.0:
         display_w, display_h = int(w * scale), int(h * scale)
@@ -446,12 +438,10 @@ def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
     window_name = "Selector de esquinas"
     cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
     
-    # 2. State variables
     state = SelectorState(Phase.COLLECTING)
     points: list[tuple[int, int]] = []
     pending_clicks: list[tuple[int, int]] = []
 
-    # 3. Mouse callback
     def on_mouse(event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
             pending_clicks.append((x, y))
@@ -459,9 +449,7 @@ def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
     cv2.setMouseCallback(window_name, on_mouse)
 
     try:
-        # 4. Main loop
         while state.phase != Phase.CLOSED:
-            # A. Handle pending clicks (translate to event)
             event = None
             current_click = None
             if pending_clicks:
@@ -469,10 +457,8 @@ def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
                 event = SelectionEvent.CLICK
                 current_click = (click_x, click_y)
 
-            # B. Handle keyboard
             key = cv2.waitKey(20) & 0xFF
             
-            # Check if window was closed via the 'X' button
             if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                 raise SelectionCancelledError("Window closed by user.")
                 
@@ -482,40 +468,10 @@ def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
                 event = SelectionEvent.RESTART
             elif key == KEY_ESC:
                 event = SelectionEvent.CANCEL
-            # If key is 255 (no key pressed), we just keep the current event (if any)
 
-            # C. Pre-validation before ENTER
-            if event == SelectionEvent.ENTER and state.phase == Phase.READY_TO_CONFIRM:
-                original_points = [(int(x / scale), int(y / scale)) for x, y in points]
-                corners_array = np.array(original_points, dtype=np.float32)
-
-                try:
-                    issues = validate_quadrilateral(corners_array)
-                except DegenerateQuadrilateralError:
-                    temp_canvas = display.copy()
-                    cv2.putText(temp_canvas, "Area demasiado pequena. Reiniciando...", 
-                                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                    cv2.imshow(window_name, temp_canvas)
-                    cv2.waitKey(1500)
-                    event = SelectionEvent.RESTART
-                    issues = None
-
-                if issues:
-                    user_choice = _show_issues_panel(display, issues)
-                    if user_choice == "restart":
-                        event = SelectionEvent.RESTART
-                    # If "confirm", we fall through and let process_event(ENTER) handle it
-
-            # D. Process event (if any)
             if event is not None:
-                try:
-                    state, action = process_event(state, event, len(points))
-                except ValueError as e:
-                    print(f"State machine error: {e}")
-                    event = None
-                    action = SelectionAction.NONE
+                state, action = process_event(state, event, len(points))
 
-                # E. Execute action
                 if action == SelectionAction.ADD_POINT:
                     if current_click:
                         points.append(current_click)
@@ -523,11 +479,10 @@ def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
                     points.clear()
                     pending_clicks.clear()
                 elif action == SelectionAction.CLOSE_ALL:
-                    raise SelectionCancelledError("User cancelled the selection.")
+                    raise SelectionCancelledError("User cancelled.")
                 elif action == SelectionAction.CONFIRM:
-                    break # Exit loop
+                    break
 
-            # F. Render frame
             canvas = display.copy()
             if state.phase == Phase.WARNING:
                 _draw_warning_panel(canvas)
@@ -535,16 +490,14 @@ def select_corners(image: np.ndarray, max_display: int = 1200) -> np.ndarray:
                 _draw_points(canvas, points)
                 if state.phase == Phase.COLLECTING:
                     banner_text = "Clic en sentido horario desde Sup.Izq | R: reiniciar | ESC: cancelar"
-                else: # READY_TO_CONFIRM
+                else:
                     banner_text = "Clic en sentido horario desde Sup.Izq | ENTER: confirmar | R: reiniciar | ESC: cancelar"
                 _draw_banner(canvas, banner_text)
 
             cv2.imshow(window_name, canvas)
             
     finally:
-        # 5. Cleanup (always runs, even if an exception is raised)
         cv2.destroyAllWindows()
 
-    # Convert to original image coordinates and return
     original_points = [(int(x / scale), int(y / scale)) for x, y in points]
     return np.array(original_points, dtype=np.float32)

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from id_card_corrector.pipeline import process_directory
 from id_card_corrector.ui.opencv.selector import SelectionCancelledError
+from id_card_corrector.ui.opencv.adapter import OpenCVInterface
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -48,9 +49,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        # 1. Instanciamos el adaptador (la UI concreta)
+        ui = OpenCVInterface()
+
+        # 2. Llamamos al pipeline inyectándole la UI
         result = process_directory(
             input_dir=args.input,
             output_dir=args.output,
+            ui=ui,  # <--- Añadimos esta línea
             card_type=args.card,
             sheet_type=args.sheet,
         )

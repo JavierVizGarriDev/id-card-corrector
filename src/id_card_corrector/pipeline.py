@@ -5,6 +5,12 @@ from pathlib import Path
 
 import numpy as np
 
+from id_card_corrector.geometry import (
+    DegenerateQuadrilateralError,
+    Issue,
+    validate_quadrilateral,
+    warp_to_rectangle
+)
 from id_card_corrector.composer import CardDoesNotFitError, compose_sheet
 from id_card_corrector.config import MARGIN_MM, SHEETS, SPECS
 from id_card_corrector.geometry import warp_to_rectangle
@@ -17,6 +23,7 @@ from id_card_corrector.io_utils import (
 )
 from id_card_corrector.ui.opencv.preview import preview_sheet
 from id_card_corrector.ui.opencv.selector import SelectionCancelledError, select_corners
+from id_card_corrector.ui.interface import UserInterface
 
 
 def _prompt_open_pdf(pdf_path: Path) -> None:
@@ -32,32 +39,17 @@ def _prompt_open_pdf(pdf_path: Path) -> None:
 def process_directory(
     input_dir: Path,
     output_dir: Path,
+    ui: UserInterface,
     card_type: str = "CI",
     sheet_type: str = "CARTA",
 ) -> Path | list[Path]:
-    """Process images in input_dir and generate the output.
-    
-    Args:
-        input_dir: Folder with the original photos.
-        output_dir: Folder where the PDF or JPGs will be saved.
-        card_type: Key for the card dimensions in SPECS (e.g., "CI").
-        sheet_type: Key for the sheet dimensions in SHEETS (e.g., "CARTA").
-        
-    Returns:
-        The path of the generated PDF, or a list of JPG paths if
-        the cards do not fit on the sheet (Caso Límite 1).
-        
-    Raises:
-        ValueError: for invalid input (empty dir, too many files).
-        SelectionCancelledError: if the user cancels during selection.
-    """
+    """Process images in input_dir and generate the output."""
     ensure_directory(input_dir)
     ensure_directory(output_dir)
 
     files = list_image_files(input_dir)
     if len(files) == 0:
-        print(f"\nNo se encontraron imágenes en '{input_dir}'.")
-        input("Pulsa ENTER para salir...")
+        ui.notify(f"No se encontraron imágenes en '{input_dir}'.")
         return []
     if len(files) > 2:
         raise ValueError(f"Se esperaban 1 o 2 imágenes, pero se encontraron {len(files)}.")
@@ -66,21 +58,31 @@ def process_directory(
     sheet_spec = SHEETS[sheet_type]
 
     cards = []
-    print(f"\nProcesando {len(files)} imagen(es)...")
+    ui.notify(f"\nProcesando {len(files)} imagen(es)...")
 
     for i, file_path in enumerate(files):
-        print(f"\n--- Imagen {i+1}: {file_path.name} ---")
+        ui.notify(f"\n--- Imagen {i+1}: {file_path.name} ---")
         img = load_image(file_path)
         
-        # select_corners will raise SelectionCancelledError if aborted
-        corners = select_corners(img)
-        
+        while True:
+            corners = ui.select_corners(img)
+            
+            try:
+                issues = validate_quadrilateral(corners)
+                if issues:
+                    choice = ui.show_issues(issues)
+                    if choice == "restart":
+                        continue
+                break
+            except DegenerateQuadrilateralError as e:
+                ui.show_error(str(e))
+                continue
+
         corrected = warp_to_rectangle(
             img, corners, card_spec.width_px, card_spec.height_px
         )
         cards.append(corrected)
 
-    # Generate output filename (salida.pdf, salida-1.pdf, etc.)
     base_name = "salida"
     pdf_path = output_dir / f"{base_name}.pdf"
     counter = 1
@@ -88,20 +90,14 @@ def process_directory(
         pdf_path = output_dir / f"{base_name}-{counter}.pdf"
         counter += 1
 
-    # Try composing and previewing
     try:
-        # If only 1 card, no preview loop needed (as per design).
         if len(cards) == 1:
             pages = compose_sheet(cards, sheet_spec, MARGIN_MM)
         else:
-            # 2 cards: preview loop with swap
             while True:
                 pages = compose_sheet(cards, sheet_spec, MARGIN_MM)
-                
-                # If L2 happened (2 pages), swap doesn't make sense. 
-                # Show first page just to confirm.
                 display_page = pages[0]
-                choice = preview_sheet(display_page)
+                choice = ui.preview_sheet(display_page)
                 
                 if choice == "cancel":
                     raise SelectionCancelledError("Cancelado en la vista previa.")
@@ -110,22 +106,24 @@ def process_directory(
                 elif choice == "swap":
                     cards.reverse()
 
-        # Save as PDF
         save_pdf(pdf_path, pages, dpi=sheet_spec.dpi)
-        print(f"\nPDF generado exitosamente: {pdf_path}")
-        _prompt_open_pdf(pdf_path)
+        ui.notify(f"\nPDF generado exitosamente: {pdf_path}")
+        
+        if ui.ask_open_pdf(str(pdf_path)):
+            import os
+            os.startfile(pdf_path)
+            
         return pdf_path
 
     except CardDoesNotFitError:
-        # Caso Límite 1: Does not fit even rotated.
-        print("\n[!] El carnet es demasiado grande para la hoja.")
-        print("    Se guardarán las imágenes corregidas como JPG sueltos.")
+        ui.notify("\n[!] El carnet es demasiado grande para la hoja.")
+        ui.notify("    Se guardarán las imágenes corregidas como JPG sueltos.")
         
         jpg_paths = []
         for i, card in enumerate(cards, start=1):
             jpg_path = output_dir / f"tarjeta_{i}.jpg"
             save_image(jpg_path, card, dpi=card_spec.dpi)
             jpg_paths.append(jpg_path)
-            print(f"    Guardado: {jpg_path}")
+            ui.notify(f"    Guardado: {jpg_path}")
             
         return jpg_paths
