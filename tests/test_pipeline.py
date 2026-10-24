@@ -10,7 +10,7 @@ import pytest
 
 from id_card_corrector.composer import CardDoesNotFitError
 from id_card_corrector.pipeline import process_directory
-from id_card_corrector.selector import SelectionCancelledError
+from id_card_corrector.ui.opencv.selector import SelectionCancelledError
 
 
 @pytest.fixture

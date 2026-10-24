@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from id_card_corrector.cli import main
-from id_card_corrector.selector import SelectionCancelledError
+from id_card_corrector.ui.opencv.selector import SelectionCancelledError
 
 
 @patch("id_card_corrector.cli.process_directory")

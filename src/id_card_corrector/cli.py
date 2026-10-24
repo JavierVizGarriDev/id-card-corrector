@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from id_card_corrector.pipeline import process_directory
-from id_card_corrector.selector import SelectionCancelledError
+from id_card_corrector.ui.opencv.selector import SelectionCancelledError
 
 
 def main(argv: list[str] | None = None) -> int:

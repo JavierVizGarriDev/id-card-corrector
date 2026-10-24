@@ -12,7 +12,7 @@ lives in the functions tested here.
 
 import pytest
 
-from id_card_corrector.selector import (
+from id_card_corrector.ui.opencv.selector import (
     Phase,
     SelectionAction,
     SelectionEvent,

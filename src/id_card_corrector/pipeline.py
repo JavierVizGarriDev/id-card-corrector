@@ -15,8 +15,8 @@ from id_card_corrector.io_utils import (
     save_image,
     save_pdf,
 )
-from id_card_corrector.preview import preview_sheet
-from id_card_corrector.selector import SelectionCancelledError, select_corners
+from id_card_corrector.ui.opencv.preview import preview_sheet
+from id_card_corrector.ui.opencv.selector import SelectionCancelledError, select_corners
 
 
 def _prompt_open_pdf(pdf_path: Path) -> None:
