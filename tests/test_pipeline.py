@@ -31,8 +31,8 @@ def ui_mock(dummy_corners):
     """A mock of the UserInterface with sensible defaults."""
     mock = MagicMock()
     mock.select_corners.return_value = dummy_corners
-    mock.ask_open_pdf.return_value = False  # Don't open the PDF by default
     mock.show_issues.return_value = "confirm"
+    # Nota: show_pdf_success ya no se configura aquí porque no devuelve nada (None)
     return mock
 
 
@@ -64,8 +64,7 @@ def test_too_many_images(setup_dirs, ui_mock):
 
 # --- 2. Happy paths (with UI mocks) ---
 
-@patch("id_card_corrector.pipeline.os.startfile")
-def test_single_image_success(mock_startfile, setup_dirs, ui_mock):
+def test_single_image_success(setup_dirs, ui_mock):
     """A single image generates a single-page PDF without preview."""
     input_dir, output_dir = setup_dirs
     input_dir.mkdir()
@@ -79,7 +78,9 @@ def test_single_image_success(mock_startfile, setup_dirs, ui_mock):
     
     ui_mock.select_corners.assert_called_once()
     ui_mock.preview_sheet.assert_not_called()  # 1 image = no preview
-    mock_startfile.assert_not_called()  # ask_open_pdf returned False
+    
+    # Verificamos que se notificó el éxito con el path correcto
+    ui_mock.show_pdf_success.assert_called_once_with(str(result))
 
 
 def test_two_images_confirm_preview(setup_dirs, ui_mock):
@@ -99,6 +100,7 @@ def test_two_images_confirm_preview(setup_dirs, ui_mock):
     
     assert ui_mock.select_corners.call_count == 2
     ui_mock.preview_sheet.assert_called_once()
+    ui_mock.show_pdf_success.assert_called_once_with(str(result))
 
 
 def test_two_images_swap_then_confirm(setup_dirs, ui_mock):
@@ -114,6 +116,7 @@ def test_two_images_swap_then_confirm(setup_dirs, ui_mock):
     result = process_directory(input_dir, output_dir, ui=ui_mock)
     assert result.exists()
     assert ui_mock.preview_sheet.call_count == 2
+    ui_mock.show_pdf_success.assert_called_once_with(str(result))
 
 
 def test_two_images_cancel_preview(setup_dirs, ui_mock):
@@ -146,21 +149,9 @@ def test_fallback_to_jpgs_when_card_does_not_fit(mock_compose, setup_dirs, ui_mo
     assert len(result) == 1
     assert result[0].name == "tarjeta_1.jpg"
     assert result[0].exists()
-
-
-@patch("id_card_corrector.pipeline.os.startfile")
-def test_prompt_open_pdf(mock_startfile, setup_dirs, ui_mock):
-    """If ui.ask_open_pdf returns True, os.startfile is called."""
-    input_dir, output_dir = setup_dirs
-    input_dir.mkdir()
-    write_dummy_image(input_dir / "img.jpg")
     
-    # Tell the mock to say "Yes, open it"
-    ui_mock.ask_open_pdf.return_value = True
-    
-    result = process_directory(input_dir, output_dir, ui=ui_mock)
-    
-    mock_startfile.assert_called_once_with(result)
+    # En este caso no debería llamarse a show_pdf_success (porque no hay PDF)
+    ui_mock.show_pdf_success.assert_not_called()
 
 
 def test_pdf_name_collision_handling(setup_dirs, ui_mock):

@@ -44,8 +44,12 @@ class OpenCVInterface:
         """Show a simple informational message."""
         print(message)
 
-    def ask_open_pdf(self, path: str) -> bool:
-        """Ask the user if they want to open the generated PDF."""
-        ans = input(f"\n¿Abrir el PDF generado ahora ({path})? (S/n): ").strip().lower()
-        return ans in ("", "s", "si", "y", "yes")
-    
+    def show_pdf_success(self, path: str) -> None:
+        """Ask to open the PDF and launch it if requested."""
+        import os
+        ans = input(f"\nPDF generado exitosamente: {path}\n¿Abrir el PDF ahora? (S/n): ").strip().lower()
+        if ans in ("", "s", "si", "y", "yes"):
+            try:
+                os.startfile(path)
+            except Exception as e:
+                print(f"No se pudo abrir el PDF automáticamente: {e}")

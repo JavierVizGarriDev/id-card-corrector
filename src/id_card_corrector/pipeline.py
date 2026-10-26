@@ -109,9 +109,8 @@ def process_directory(
         save_pdf(pdf_path, pages, dpi=sheet_spec.dpi)
         ui.notify(f"\nPDF generado exitosamente: {pdf_path}")
         
-        if ui.ask_open_pdf(str(pdf_path)):
-            import os
-            os.startfile(pdf_path)
+        # La UI se encarga de abrirlo, descargarlo o lo que sea.
+        ui.show_pdf_success(str(pdf_path))
             
         return pdf_path
 
