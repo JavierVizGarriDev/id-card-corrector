@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 app = FastAPI(title="ID Card Corrector - Test")
 
@@ -15,3 +16,14 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 async def root():
     """Serve the main HTML page."""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+class TestPoints(BaseModel):
+    corners: list[list[float]]
+
+@app.post("/api/test")
+async def test_endpoint(data: TestPoints):
+    print("\n--- ¡Coordenadas recibidas en Python! ---")
+    print(data.corners)
+    print("-----------------------------------------\n")
+    return {"status": "ok"}
