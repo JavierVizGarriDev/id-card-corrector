@@ -45,18 +45,29 @@ def main(argv: list[str] | None = None) -> int:
         default="CARTA",
         help="Tipo de hoja (default: CARTA)"
     )
-    
+
+    parser.add_argument(
+        "--ui",
+        type=str,
+        default="opencv",
+        choices=["opencv", "web"],
+        help="Interfaz de usuario a usar (default: opencv)"
+    )
+
     args = parser.parse_args(argv)
 
     try:
         # 1. Instanciamos el adaptador (la UI concreta)
-        ui = OpenCVInterface()
+        if args.ui == "web":
+            from id_card_corrector.ui.web.adapter import WebInterface
+            ui = WebInterface()
+        else:
+            ui = OpenCVInterface()
 
-        # 2. Llamamos al pipeline inyectándole la UI
         result = process_directory(
             input_dir=args.input,
             output_dir=args.output,
-            ui=ui,  # <--- Añadimos esta línea
+            ui=ui,
             card_type=args.card,
             sheet_type=args.sheet,
         )
