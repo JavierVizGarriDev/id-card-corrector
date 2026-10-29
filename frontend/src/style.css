@@ -1,10 +1,50 @@
+/* 1. Reset básico */
 * {
-  box-sizing: border-box;
   margin: 0;
   padding: 0;
+  box-sizing: border-box;
 }
 
-body, html {
+/* 2. Control del documento */
+html,
+body {
   height: 100%;
-  font-family: system-ui, -apple-system, sans-serif;
+  overflow: hidden; /* Cero scroll en la ventana */
+}
+
+/* 3. Contenedor principal */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Ocupa el 100% de la ventana */
+  background-color: #f5f5f5; /* Un gris muy claro de fondo */
+}
+
+/* 4. Las tres zonas */
+.top-bar {
+  flex: 0 0 auto; /* No se estira ni se encoge */
+  height: 60px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas-area {
+  flex: 1; /* Ocupa todo el espacio sobrante */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; /* Seguridad interna */
+}
+
+.bottom-bar {
+  flex: 0 0 auto;
+  height: 60px;
+  background-color: #ffffff;
+  border-top: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
