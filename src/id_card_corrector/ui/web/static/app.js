@@ -23,6 +23,8 @@ async function pollState() {
         const response = await fetch('/api/state');
         const state = await response.json();
         
+        let imageChanged = false;
+
         // Solo descargar la imagen si la versión cambió
         if (state.image_version !== currentImageVersion) {
             currentImageVersion = state.image_version;
@@ -30,13 +32,19 @@ async function pollState() {
                 const imgRes = await fetch('/api/image');
                 const imgData = await imgRes.json();
                 cachedImageBase64 = imgData.image_b64;
+                imageChanged = true;
             }
         }
 
-        // Actualizar UI solo si la tarea cambió
+        // Actualizar UI si la tarea cambió
         if (state.task !== currentTask) {
             currentTask = state.task;
             updateUIForTask(state);
+        } 
+        // Si la tarea es la misma (ej. segunda foto) pero la imagen cambió, limpiamos los puntos viejos
+        else if (imageChanged && state.task === 'select_corners') {
+            currentPoints = [];
+            drawPoints();
         }
     } catch (error) {
         console.error("Error de conexión:", error);
@@ -95,6 +103,9 @@ function updateUIForTask(state) {
         } else {
             controlsBar.appendChild(createButton('Entendido', 'btn-primary', () => sendAction('confirm')));
         }
+    } else if (state.task === 'show_success') {
+        canvas.style.display = 'none'; // Ocultar imagen
+        controlsBar.appendChild(createButton('Entendido', 'btn-primary', () => sendAction('confirm')));
     }
 }
 

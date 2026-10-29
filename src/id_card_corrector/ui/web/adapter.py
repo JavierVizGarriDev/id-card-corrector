@@ -4,6 +4,7 @@ import threading
 import time
 import webbrowser
 from typing import Any
+import os
 
 import numpy as np
 import uvicorn
@@ -20,6 +21,7 @@ class WebInterface:
         self.port = port
         self._event = threading.Event()
         self._server_started = False
+        self._browser_opened = False  # <--- Arreglo 1: Control de pestañas
 
     def _start_server(self) -> None:
         """Start the FastAPI server in a background thread (once)."""
@@ -27,18 +29,16 @@ class WebInterface:
             return
 
         def run_server():
-            # Desactivamos los logs de Uvicorn para no ensuciar la consola
             uvicorn.run(server.app, host="127.0.0.1", port=self.port, log_level="error")
 
         threading.Thread(target=run_server, daemon=True).start()
-        time.sleep(1.5)  # Dar tiempo a Uvicorn para arrancar
+        time.sleep(1.5)
         self._server_started = True
 
     def _wait_for_action(self, task_name: str, image: np.ndarray | None = None, prompt: str = "") -> dict[str, Any]:
         """Block the pipeline until the web UI sends an action."""
         self._start_server()
         
-        # 1. Configurar el estado para el navegador
         server.state.current_task = task_name
         server.state.prompt_text = prompt
         if image is not None:
@@ -47,27 +47,31 @@ class WebInterface:
             server.state.image_b64 = ""
             server.state.image_version += 1
 
-        # 2. Preparar el Evento y abrir el navegador
         server.adapter_event = self._event
         server.adapter_result = {}
         self._event.clear()
-        webbrowser.open(f"http://127.0.0.1:{self.port}")
+        
+        # <--- Arreglo 2: Abrir el navegador solo una vez
+        if not self._browser_opened:
+            webbrowser.open(f"http://127.0.0.1:{self.port}")
+            self._browser_opened = True
 
-        # 3. Bloquear Python hasta que el servidor reciba la acción (timeout 30 min)
         success = self._event.wait(timeout=1800)
         if not success:
             raise TimeoutError("The web UI timed out waiting for user action.")
         
         return server.adapter_result
 
-    # --- Métodos del Protocolo ---
+    # --- Métodos del Protocolo (con textos guía) ---
 
     def select_corners(self, image: np.ndarray) -> np.ndarray:
-        result = self._wait_for_action("select_corners", image)
+        prompt = "Haz clic en las 4 esquinas del carnet (Sup. Izq, Sup. Der, Inf. Der, Inf. Izq)"
+        result = self._wait_for_action("select_corners", image=image, prompt=prompt)
         return np.array(result.get("corners", []), dtype=np.float32)
 
     def preview_sheet(self, sheet: np.ndarray) -> str:
-        result = self._wait_for_action("preview_sheet", sheet)
+        prompt = "Revisa la hoja generada. Puedes confirmar, intercambiar (S) o cancelar (ESC)."
+        result = self._wait_for_action("preview_sheet", image=sheet, prompt=prompt)
         return str(result.get("action", "cancel"))
 
     def show_issues(self, issues: tuple[Issue, ...]) -> str:
@@ -76,15 +80,20 @@ class WebInterface:
             Issue.EXTREME_ASPECT_RATIO: "La selección es demasiado alargada.",
             Issue.TINY_SIDE: "Uno de los lados es demasiado pequeño.",
         }
-        messages = "\n".join([issue_messages.get(i, str(i)) for i in issues])
+        messages = "Problemas detectados:\n" + "\n".join([issue_messages.get(i, str(i)) for i in issues])
         result = self._wait_for_action("show_issues", prompt=messages)
         return str(result.get("action", "restart"))
 
     def show_error(self, message: str) -> None:
-        self._wait_for_action("show_error", prompt=message)
+        self._wait_for_action("show_error", prompt=f"Error: {message}")
 
     def notify(self, message: str) -> None:
         print(message)
 
     def show_pdf_success(self, path: str) -> None:
-        print(f"\nPDF generado exitosamente: {path}")
+        prompt = f"¡PDF generado exitosamente!\nRuta: {path}\n\nEl archivo se abrirá en tu visor."
+        self._wait_for_action("show_success", prompt=prompt)
+        try:
+            os.startfile(path)
+        except Exception as e:
+            print(f"No se pudo abrir el PDF: {e}")
