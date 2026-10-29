@@ -20,3 +20,10 @@ __pycache__/
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+# Node.js / Vite
+frontend/node_modules/
+frontend/dist/
+
+# Archivos compilados de Vite (se generan con npm run build)
+src/id_card_corrector/ui/web/static/
