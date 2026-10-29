@@ -1,7 +1,16 @@
 <template>
-  <div id="app-container">
-    <h1>ID Card Corrector - Nueva UI</h1>
-    <p>Esperando inicialización...</p>
+  <div class="app-container">
+    <header class="top-bar">
+      <p>Barra superior</p>
+    </header>
+
+    <main class="canvas-area">
+      <p>Área del canvas</p>
+    </main>
+
+    <footer class="bottom-bar">
+      <p>Barra inferior</p>
+    </footer>
   </div>
 </template>
 
