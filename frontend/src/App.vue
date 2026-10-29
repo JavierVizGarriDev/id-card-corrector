@@ -65,6 +65,28 @@ onUnmounted(() => {
 </script>
 
 
-<style>
-/* Los estilos globales se moverán a style.css */
+<style scoped>
+/* Estilos para el contenedor de los controles */
+.controls {
+  display: flex;
+  gap: 15px; /* Separación entre botones */
+}
+
+/* Estilos para los botones */
+button {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  background-color: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s; /* Suaviza el cambio de color */
+}
+
+/* Efecto al pasar el ratón por encima */
+button:hover {
+  background-color: #d0d0d0;
+}
 </style>
