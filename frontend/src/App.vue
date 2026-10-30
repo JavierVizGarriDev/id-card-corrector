@@ -5,7 +5,7 @@
     </header>
 
     <main class="canvas-area">
-      <p>Área del canvas</p>
+      <img :src="imageUrl" alt="Carnet de identidad" class="canvas-image" />
     </main>
 
     <footer class="bottom-bar">
@@ -33,6 +33,9 @@ import { ref, onMounted, onUnmounted } from 'vue';
 
 // Creamos una referencia reactiva para el estado de la UI
 const currentState = ref('select_corners');
+
+// Variable para la URL de la imagen (usamos un placeholder por ahora)
+const imageUrl = ref('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNTAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iNDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGFsaWdubWVudC1iYXNlbGluZT0ibWlkZGxlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZmlsbD0iIzMzMyI+SW1hZ2VuIGRlIHBydWViYTwvdGV4dD48L3N2Zz4=');
 
 function simularConfirmacion() {
   currentState.value = 'preview_sheet';
@@ -88,5 +91,13 @@ button {
 /* Efecto al pasar el ratón por encima */
 button:hover {
   background-color: #d0d0d0;
+}
+
+.canvas-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* La magia: escala proporcionalmente sin recortar */
+  /* Un borde temporal para que veas dónde empieza y acaba la imagen */
+  border: 2px dashed #999; 
 }
 </style>
