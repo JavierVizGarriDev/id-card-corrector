@@ -31,7 +31,7 @@
       
       <!-- Controles para el Estado 1: Selección de esquinas -->
       <div v-if="currentState === 'select_corners'" class="controls">
-        <button>Reiniciar (R)</button>
+        <button @click="reiniciarSeleccion">Reiniciar (R)</button>
         <button @click="simularCancelacion">Cancelar (ESC)</button>
         <button @click="simularConfirmacion">Confirmar (ENTER)</button>
       </div>
@@ -88,6 +88,11 @@ function simularCancelacion() {
   currentState.value = 'select_corners';
 }
 
+function reiniciarSeleccion() {
+  // Vaciamos el array asignándole un array vacío
+  puntos.value = [];
+}
+
 // Esta función se ejecutará cada vez que se pulse una tecla
 
 function handleKeydown(event: KeyboardEvent) {
@@ -95,6 +100,8 @@ function handleKeydown(event: KeyboardEvent) {
     simularConfirmacion();
   } else if (event.key === 'Escape') {
     simularCancelacion();
+  } else if (event.key.toLowerCase() === 'r') {
+    reiniciarSeleccion();
   }
 }
 
@@ -142,7 +149,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown);
 });
 </script>
-
 
 <style scoped>
 /* Estilos para el contenedor de los controles */
