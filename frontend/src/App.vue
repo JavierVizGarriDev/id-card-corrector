@@ -33,7 +33,12 @@
       <div v-if="currentState === 'select_corners'" class="controls">
         <button @click="reiniciarSeleccion">Reiniciar (R)</button>
         <button @click="simularCancelacion">Cancelar (ESC)</button>
-        <button @click="simularConfirmacion">Confirmar (ENTER)</button>
+        <button 
+          @click="simularConfirmacion" 
+          :disabled="puntos.length !== 4"
+        >
+          Confirmar (ENTER)
+        </button>
       </div>
 
       <!-- Controles para el Estado 2: Previsualización -->
@@ -77,7 +82,6 @@ function handleImageLoad(event: Event) {
     ancho: img.naturalWidth,
     alto: img.naturalHeight
   };
-  console.log('Dimensiones reales:', dimensionesReales.value);
 }
 
 function simularConfirmacion() {
@@ -97,7 +101,10 @@ function reiniciarSeleccion() {
 
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter') {
-    simularConfirmacion();
+    // Solo confirmamos si hay exactamente 4 puntos
+    if (puntos.value.length === 4) {
+      simularConfirmacion();
+    }
   } else if (event.key === 'Escape') {
     simularCancelacion();
   } else if (event.key.toLowerCase() === 'r') {
@@ -134,9 +141,6 @@ function handleImageClick(event: MouseEvent) {
     xReal: Math.round(xReal),
     yReal: Math.round(yReal)
   });
-  
-  console.log('Punto en pantalla:', { x: event.offsetX, y: event.offsetY });
-  console.log('Punto real para Python:', { x: Math.round(xReal), y: Math.round(yReal) });
 }
 
 // Le decimos al navegador que empiece a escuchar cuando el componente se monta
@@ -172,6 +176,20 @@ button {
 
 /* Efecto al pasar el ratón por encima */
 button:hover {
+  background-color: #d0d0d0;
+}
+
+/* Estilo cuando el botón está deshabilitado */
+button:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  border-color: #ddd;
+  cursor: not-allowed; /* El cursor muestra un símbolo de prohibido */
+  opacity: 0.7;
+}
+
+/* Evitamos que el hover funcione si está deshabilitado */
+button:hover:not(:disabled) {
   background-color: #d0d0d0;
 }
 
