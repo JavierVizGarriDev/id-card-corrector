@@ -58,8 +58,8 @@ async def post_action(request: ActionRequest):
 
 def set_image_for_display(image: np.ndarray) -> None:
     """Convierte la imagen de OpenCV a Base64 para el navegador."""
-    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    success, buffer = cv2.imencode(".png", rgb)
+    # Al quitar el cvtColor, pasamos la imagen BGR directamente, que es lo que imencode espera.
+    success, buffer = cv2.imencode(".png", image)
     if success:
         state.image_b64 = base64.b64encode(buffer).decode("utf-8")
         state.image_version += 1

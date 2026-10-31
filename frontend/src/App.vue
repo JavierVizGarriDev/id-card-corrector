@@ -34,7 +34,7 @@
         <button @click="reiniciarSeleccion">Reiniciar (R)</button>
         <button @click="simularCancelacion">Cancelar (ESC)</button>
         <button 
-          @click="simularConfirmacion" 
+          @click="enviarAccion('confirm', puntos)" 
           :disabled="puntos.length !== 4"
         >
           Confirmar (ENTER)
@@ -68,6 +68,9 @@ let pollingInterval: ReturnType<typeof setInterval> | null = null;
 // Creamos una referencia reactiva para el estado de la UI
 const currentState = ref('select_corners');
 
+// Variable para rastrear la versión de la imagen que estamos mostrando
+const currentImageVersion = ref(0)
+
 // Variable para la URL de la imagen (usamos un placeholder por ahora)
 const imageUrl = ref('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iNTAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iNDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGFsaWdubWVudC1iYXNlbGluZT0ibWlkZGxlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZmlsbD0iIzMzMyI+SW1hZ2VuIGRlIHBydWViYTwvdGV4dD48L3N2Zz4=');
 
@@ -77,6 +80,46 @@ const puntos = ref<Punto[]>([]);
 // Variables para guardar el tamaño real de la imagen
 const dimensionesReales = ref({ ancho: 0, alto: 0 });
 
+// Función para pedir la imagen real al backend
+async function fetchImage() {
+  try {
+    const response = await fetch('/api/image');
+    const data = await response.json();
+    
+    if (data.image_b64) {
+      // Añadimos el prefijo para que el navegador sepa que es un PNG en Base64
+      imageUrl.value = `data:image/png;base64,${data.image_b64}`;
+    }
+  } catch (error) {
+    console.error('Error al descargar la imagen:', error);
+  }
+}
+
+async function enviarAccion(action: string, corners?: any[]) {
+  try {
+    const payload: any = { action: action };
+    
+    if (corners) {
+      // Transformamos el array de objetos al formato list[list[float]] que espera Pydantic
+      payload.corners = corners.map(p => [p.xReal, p.yReal]);
+    }
+
+    const response = await fetch('/api/action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al enviar la acción');
+    }
+  } catch (error) {
+    console.error('Error enviando acción:', error);
+  }
+}
+
 // Función que se ejecuta cuando la imagen termina de cargar
 function handleImageLoad(event: Event) {
   const img = event.target as HTMLImageElement;
@@ -84,10 +127,6 @@ function handleImageLoad(event: Event) {
     ancho: img.naturalWidth,
     alto: img.naturalHeight
   };
-}
-
-function simularConfirmacion() {
-  currentState.value = 'preview_sheet';
 }
 
 function simularCancelacion() {
@@ -99,22 +138,24 @@ function reiniciarSeleccion() {
   puntos.value = [];
 }
 
-// Función que pregunta al backend por el estado
 async function checkState() {
   try {
     const response = await fetch('/api/state');
-    
-    if (!response.ok) {
-      throw new Error('Error en la red');
-    }
+    if (!response.ok) throw new Error('Error en la red');
     
     const data = await response.json();
     
-    // Si el backend nos envía un estado distinto al que tenemos, lo actualizamos
-    if (data.state && data.state !== currentState.value) {
-      currentState.value = data.state;
-      console.log('Estado actualizado desde Python:', currentState.value);
+    // Sincronizamos el estado (task)
+    if (data.task && data.task !== currentState.value) {
+      currentState.value = data.task;
     }
+
+    // ¡NUEVO! Sincronizamos la imagen si la versión ha cambiado
+    if (data.image_version && data.image_version !== currentImageVersion.value) {
+      currentImageVersion.value = data.image_version;
+      await fetchImage(); // Descargamos la nueva imagen
+    }
+
   } catch (error) {
     console.error('Error al consultar el estado:', error);
   }
@@ -124,9 +165,9 @@ async function checkState() {
 
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter') {
-    // Solo confirmamos si hay exactamente 4 puntos
+    // Solo enviamos si hay 4 puntos
     if (puntos.value.length === 4) {
-      simularConfirmacion();
+      enviarAccion('confirm', puntos.value); 
     }
   } else if (event.key === 'Escape') {
     simularCancelacion();
