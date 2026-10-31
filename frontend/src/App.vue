@@ -63,6 +63,8 @@ interface Punto {
   yReal: number;
 }
 
+let pollingInterval: ReturnType<typeof setInterval> | null = null;
+
 // Creamos una referencia reactiva para el estado de la UI
 const currentState = ref('select_corners');
 
@@ -95,6 +97,27 @@ function simularCancelacion() {
 function reiniciarSeleccion() {
   // Vaciamos el array asignándole un array vacío
   puntos.value = [];
+}
+
+// Función que pregunta al backend por el estado
+async function checkState() {
+  try {
+    const response = await fetch('/api/state');
+    
+    if (!response.ok) {
+      throw new Error('Error en la red');
+    }
+    
+    const data = await response.json();
+    
+    // Si el backend nos envía un estado distinto al que tenemos, lo actualizamos
+    if (data.state && data.state !== currentState.value) {
+      currentState.value = data.state;
+      console.log('Estado actualizado desde Python:', currentState.value);
+    }
+  } catch (error) {
+    console.error('Error al consultar el estado:', error);
+  }
 }
 
 // Esta función se ejecutará cada vez que se pulse una tecla
@@ -146,11 +169,17 @@ function handleImageClick(event: MouseEvent) {
 // Le decimos al navegador que empiece a escuchar cuando el componente se monta
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown);
+  // Arrancamos el polling cada 300ms
+  pollingInterval = setInterval(checkState, 300);
+  checkState(); // Hacemos una primera llamada inmediata
 });
 
-// Le decimos que deje de escuchar cuando el componente se destruye
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown);
+  // Limpiamos el temporizador al salir para no dejar procesos en segundo plano
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+  }
 });
 </script>
 

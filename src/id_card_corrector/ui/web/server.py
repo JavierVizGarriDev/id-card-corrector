@@ -2,14 +2,12 @@
 
 import base64
 import threading
-from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+
 from pydantic import BaseModel
 
 # --- Estado de la sesión ---
@@ -32,13 +30,6 @@ class ActionRequest(BaseModel):
 
 # --- Aplicación FastAPI ---
 app = FastAPI(title="ID Card Corrector Web UI")
-
-STATIC_DIR = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-@app.get("/", response_class=HTMLResponse)
-async def serve_index():
-    return FileResponse(STATIC_DIR / "index.html")
 
 @app.get("/api/state")
 async def get_state():

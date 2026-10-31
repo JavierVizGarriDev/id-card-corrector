@@ -5,6 +5,9 @@ import time
 import webbrowser
 from typing import Any
 import os
+import subprocess
+import urllib.request
+import urllib.error
 
 import numpy as np
 import uvicorn
@@ -35,6 +38,22 @@ class WebInterface:
         time.sleep(1.5)
         self._server_started = True
 
+        subprocess.Popen("npm run dev", cwd="frontend", shell=True)
+
+    def _wait_for_vite(self, url: str, retries: int = 3, delay: int = 2) -> None:
+        """Hace peticiones a Vite hasta que responda o se agoten los reintentos."""
+        for intento in range(retries):
+            try:
+                # Intentamos abrir la URL. Si Vite está vivo, no lanzará error.
+                urllib.request.urlopen(url)
+                return  # ¡Éxito! Salimos de la función.
+            except urllib.error.URLError:
+                print(f"Vite aún no responde. Reintentando en {delay}s... ({intento + 1}/{retries})")
+                time.sleep(delay)
+        
+        # Si el bucle termina sin haber hecho 'return', es que fallaron todos los intentos
+        raise ConnectionError(f"No se pudo conectar con Vite en {url} tras {retries} intentos.")
+
     def _wait_for_action(self, task_name: str, image: np.ndarray | None = None, prompt: str = "") -> dict[str, Any]:
         """Block the pipeline until the web UI sends an action."""
         self._start_server()
@@ -51,11 +70,13 @@ class WebInterface:
         server.adapter_result = {}
         self._event.clear()
         
-        # <--- Arreglo 2: Abrir el navegador solo una vez
+        # <--- Arreglo 2: Abrir el navegador apuntando a Vite (5173)
         if not self._browser_opened:
-            webbrowser.open(f"http://127.0.0.1:{self.port}")
+            vite_url = "http://localhost:5173"
+            self._wait_for_vite(vite_url) # Espera activa con reintentos
+            webbrowser.open(vite_url)
             self._browser_opened = True
-
+            
         success = self._event.wait(timeout=1800)
         if not success:
             raise TimeoutError("The web UI timed out waiting for user action.")
