@@ -16,14 +16,16 @@
         />
         
         <!-- Recorremos el array de puntos con v-for -->
-        <span 
-          v-for="(punto, index) in puntos" 
-          :key="index"
-          class="punto-seleccion"
-          :style="{ left: punto.xPantalla + 'px', top: punto.yPantalla + 'px' }"
-        >
-          {{ index + 1 }}
-        </span>
+        <template v-if="currentState === 'select_corners'">
+          <span 
+            v-for="(punto, index) in puntos" 
+            :key="index"
+            class="punto-seleccion"
+            :style="{ left: punto.xPantalla + 'px', top: punto.yPantalla + 'px' }"
+          >
+            {{ index + 1 }}
+          </span>
+        </template>
       </div>
     </main>
 
@@ -89,6 +91,9 @@ async function fetchImage() {
     if (data.image_b64) {
       // Añadimos el prefijo para que el navegador sepa que es un PNG en Base64
       imageUrl.value = `data:image/png;base64,${data.image_b64}`;
+      
+      //Si llega una imagen nueva, limpiamos los puntos anteriores
+      puntos.value = [];
     }
   } catch (error) {
     console.error('Error al descargar la imagen:', error);
@@ -100,7 +105,6 @@ async function enviarAccion(action: string, corners?: any[]) {
     const payload: any = { action: action };
     
     if (corners) {
-      // Transformamos el array de objetos al formato list[list[float]] que espera Pydantic
       payload.corners = corners.map(p => [p.xReal, p.yReal]);
     }
 
@@ -115,6 +119,11 @@ async function enviarAccion(action: string, corners?: any[]) {
     if (!response.ok) {
       throw new Error('Error al enviar la acción');
     }
+
+    // ¡NUEVO! Si la acción fue exitosa, limpiamos los puntos de la pantalla
+    // Esto cubre el caso de las dos imágenes y evita clics accidentales.
+    puntos.value = []; 
+
   } catch (error) {
     console.error('Error enviando acción:', error);
   }
