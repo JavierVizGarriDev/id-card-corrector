@@ -227,7 +227,15 @@ async function checkState() {
 function handleKeydown(event: KeyboardEvent) {
     // Si el backend está muerto, ignoramos cualquier atajo de teclado
   if (isBackendDisconnected.value) return;
-  
+    // --- NUEVO: Aduana del Modal de Cancelación ---
+  if (showCancelModal.value) {
+    if (event.key === 'Enter') {
+      cerrarModalCancelacion(); // "No, volver"
+    } else if (event.key === 'Escape') {
+      confirmarCancelacionTotal(); // "Sí, cancelar todo"
+    }
+    return; // Salimos para que no afecte a los atajos de la app de fondo
+  }
   if (event.key === 'Enter') {
     // Solo enviamos si hay 4 puntos
     if (puntos.value.length === 4) {

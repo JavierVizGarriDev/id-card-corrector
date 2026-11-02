@@ -8,6 +8,7 @@ import os
 import subprocess
 import urllib.request
 import urllib.error
+import atexit
 
 import numpy as np
 import uvicorn
@@ -26,6 +27,19 @@ class WebInterface:
         self._event = threading.Event()
         self._server_started = False
         self._browser_opened = False  # <--- Arreglo 1: Control de pestañas
+        atexit.register(self._cleanup_vite)
+
+    def _cleanup_vite(self) -> None:
+        """Mata el proceso de Vite cuando Python se cierra."""
+        if self._vite_process:
+            try:
+                # En Windows, usamos taskkill para matar el árbol de procesos (cmd.exe y node.exe)
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(self._vite_process.pid)],
+                    capture_output=True
+                )
+            except Exception as e:
+                print(f"No se pudo cerrar Vite limpiamente: {e}")
 
     def _start_server(self) -> None:
         """Start the FastAPI server in a background thread (once)."""
@@ -39,7 +53,8 @@ class WebInterface:
         time.sleep(1.5)
         self._server_started = True
 
-        subprocess.Popen("npm run dev", cwd="frontend", shell=True)
+        # Guardamos el proceso en la variable de instancia
+        self._vite_process = subprocess.Popen("npm run dev", cwd="frontend", shell=True)
 
     def _wait_for_vite(self, url: str, retries: int = 3, delay: int = 2) -> None:
         """Hace peticiones a Vite hasta que responda o se agoten los reintentos."""
