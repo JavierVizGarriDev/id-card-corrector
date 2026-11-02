@@ -50,11 +50,11 @@
       
       <!-- Controles para el Estado 1: Selección de esquinas -->
       <div v-if="currentState === 'select_corners'" class="controls">
-        <button @click="reiniciarSeleccion">Reiniciar (R)</button>
-        <button @click="abrirModalCancelacion">Cancelar (ESC)</button>
+        <button @click="reiniciarSeleccion" :disabled="isBackendDisconnected">Reiniciar (R)</button>
+        <button @click="abrirModalCancelacion" :disabled="isBackendDisconnected">Cancelar (ESC)</button>
         <button 
           @click="enviarAccion('confirm', puntos)" 
-          :disabled="puntos.length !== 4"
+          :disabled="puntos.length !== 4 || isBackendDisconnected"
         >
           Confirmar (ENTER)
         </button>
@@ -62,9 +62,9 @@
 
       <!-- Controles para el Estado 2: Previsualización -->
       <div v-else-if="currentState === 'preview_sheet'" class="controls">
-        <button>Intercambiar (S)</button>
-        <button @click="abrirModalCancelacion">Cancelar (ESC)</button>
-        <button>Confirmar (ENTER)</button>
+        <button :disabled="isBackendDisconnected">Intercambiar (S)</button>
+        <button @click="abrirModalCancelacion" :disabled="isBackendDisconnected">Cancelar (ESC)</button>
+        <button :disabled="isBackendDisconnected">Confirmar (ENTER)</button>
       </div>
 
     </footer>
@@ -178,7 +178,6 @@ function handleImageLoad(event: Event) {
   };
 }
 
-
 function reiniciarSeleccion() {
   // Vaciamos el array asignándole un array vacío
   puntos.value = [];
@@ -225,8 +224,10 @@ async function checkState() {
 }
 
 // Esta función se ejecutará cada vez que se pulse una tecla
-
 function handleKeydown(event: KeyboardEvent) {
+    // Si el backend está muerto, ignoramos cualquier atajo de teclado
+  if (isBackendDisconnected.value) return;
+  
   if (event.key === 'Enter') {
     // Solo enviamos si hay 4 puntos
     if (puntos.value.length === 4) {
