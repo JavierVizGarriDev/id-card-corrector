@@ -1,10 +1,16 @@
 <template>
   <div class="app-container">
     <header class="top-bar">
-      <p>Estado actual: {{ currentState }}</p>
+      <p v-if="isBackendDisconnected" style="color: red; font-weight: bold;">
+        Proceso finalizado o cancelado. Puedes cerrar esta pestaña.
+      </p>
+      <p v-else>Estado actual: {{ currentState }}</p>
     </header>
 
-    <main class="canvas-area">
+    <main 
+      class="canvas-area" 
+      :class="{ 'canvas-disabled': isBackendDisconnected }"
+    >
       <!-- Envolvemos la imagen para poder posicionar los puntos encima -->
       <div class="image-wrapper">
         <img 
@@ -26,6 +32,17 @@
             {{ index + 1 }}
           </span>
         </template>
+            <!-- Modal de Cancelación Transversal -->
+        <div v-if="showCancelModal" class="modal-overlay">
+          <div class="modal-content">
+            <h2>¿Cancelar el proceso?</h2>
+            <p>Se abortará el procesamiento actual y se perderán los datos.</p>
+            <div class="modal-controls">
+              <button @click="cerrarModalCancelacion">No, volver (ENTER)</button>
+              <button @click="confirmarCancelacionTotal">Sí, cancelar todo (ESC)</button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -34,7 +51,7 @@
       <!-- Controles para el Estado 1: Selección de esquinas -->
       <div v-if="currentState === 'select_corners'" class="controls">
         <button @click="reiniciarSeleccion">Reiniciar (R)</button>
-        <button @click="simularCancelacion">Cancelar (ESC)</button>
+        <button @click="abrirModalCancelacion">Cancelar (ESC)</button>
         <button 
           @click="enviarAccion('confirm', puntos)" 
           :disabled="puntos.length !== 4"
@@ -46,7 +63,7 @@
       <!-- Controles para el Estado 2: Previsualización -->
       <div v-else-if="currentState === 'preview_sheet'" class="controls">
         <button>Intercambiar (S)</button>
-        <button @click="simularCancelacion">Cancelar (ESC)</button>
+        <button @click="abrirModalCancelacion">Cancelar (ESC)</button>
         <button>Confirmar (ENTER)</button>
       </div>
 
@@ -67,6 +84,11 @@ interface Punto {
 
 let pollingInterval: ReturnType<typeof setInterval> | null = null;
 
+// Variables para controlar si el backend sigue vivo
+let pollingFailures = 0;
+
+const isBackendDisconnected = ref(false);
+
 // Creamos una referencia reactiva para el estado de la UI
 const currentState = ref('select_corners');
 
@@ -81,6 +103,24 @@ const puntos = ref<Punto[]>([]);
 
 // Variables para guardar el tamaño real de la imagen
 const dimensionesReales = ref({ ancho: 0, alto: 0 });
+
+// Variable para controlar la visibilidad del modal de cancelación
+const showCancelModal = ref(false);
+
+// Abre el modal
+function abrirModalCancelacion() {
+  showCancelModal.value = true;
+}
+
+// Cierra el modal y vuelve al trabajo
+function cerrarModalCancelacion() {
+  showCancelModal.value = false;
+}
+
+async function confirmarCancelacionTotal() {
+  showCancelModal.value = false;
+  await enviarAccion('cancel');
+}
 
 // Función para pedir la imagen real al backend
 async function fetchImage() {
@@ -138,9 +178,6 @@ function handleImageLoad(event: Event) {
   };
 }
 
-function simularCancelacion() {
-  currentState.value = 'select_corners';
-}
 
 function reiniciarSeleccion() {
   // Vaciamos el array asignándole un array vacío
@@ -148,25 +185,42 @@ function reiniciarSeleccion() {
 }
 
 async function checkState() {
+  // Si ya sabemos que está desconectado, no hacemos nada
+  if (isBackendDisconnected.value) return;
+
   try {
     const response = await fetch('/api/state');
     if (!response.ok) throw new Error('Error en la red');
     
     const data = await response.json();
     
+    // Si llegamos aquí, el backend está vivo. Reiniciamos el contador.
+    pollingFailures = 0;
+
     // Sincronizamos el estado (task)
     if (data.task && data.task !== currentState.value) {
       currentState.value = data.task;
     }
 
-    // ¡NUEVO! Sincronizamos la imagen si la versión ha cambiado
+    // Sincronizamos la imagen
     if (data.image_version && data.image_version !== currentImageVersion.value) {
       currentImageVersion.value = data.image_version;
-      await fetchImage(); // Descargamos la nueva imagen
+      await fetchImage();
     }
 
   } catch (error) {
-    console.error('Error al consultar el estado:', error);
+    pollingFailures++;
+    console.warn(`Fallo de conexión con el backend (${pollingFailures}/3)`);
+    
+    // Si falla 3 veces seguidas, asumimos que el backend ha muerto
+    if (pollingFailures >= 3) {
+      isBackendDisconnected.value = true;
+      
+      // Detenemos el polling para siempre
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    }
   }
 }
 
@@ -179,7 +233,7 @@ function handleKeydown(event: KeyboardEvent) {
       enviarAccion('confirm', puntos.value); 
     }
   } else if (event.key === 'Escape') {
-    simularCancelacion();
+    abrirModalCancelacion();
   } else if (event.key.toLowerCase() === 'r') {
     reiniciarSeleccion();
   }
@@ -305,5 +359,53 @@ button:hover:not(:disabled) {
   transform: translate(-50%, -50%);
   pointer-events: none; /* Evita que el punto bloquee el siguiente clic */
   box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* El fondo oscuro que cubre todo */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5); /* Negro semitransparente */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* Asegura que esté por encima de todo */
+}
+
+/* La caja del modal */
+.modal-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 400px;
+}
+
+.modal-content h2 {
+  margin-bottom: 15px;
+  color: #333;
+}
+
+.modal-content p {
+  margin-bottom: 25px;
+  color: #666;
+}
+
+.modal-controls {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+/* Estilos cuando el backend se ha desconectado */
+.canvas-disabled {
+  opacity: 0.3; /* Hace que se vea semitransparente */
+  filter: grayscale(100%); /* Pone la imagen en blanco y negro */
+  pointer-events: none; /* Bloquea los clics del ratón en toda esta zona */
+  transition: all 0.5s ease; /* Hace que el cambio sea suave, no un golpe brusco */
 }
 </style>

@@ -15,6 +15,7 @@ import uvicorn
 from id_card_corrector.geometry import Issue
 from id_card_corrector.ui.interface import UserInterface
 from id_card_corrector.ui.web import server
+from id_card_corrector.ui.opencv.selector import SelectionCancelledError
 
 
 class WebInterface:
@@ -80,8 +81,15 @@ class WebInterface:
         success = self._event.wait(timeout=1800)
         if not success:
             raise TimeoutError("The web UI timed out waiting for user action.")
+
+         # --- INTERCEPTOR CENTRAL DE CANCELACIÓN ---
+        # Si el frontend envía "cancel", abortamos el pipeline desde aquí.
+        if server.adapter_result.get("action") == "cancel":
+            raise SelectionCancelledError("Cancelado por el usuario desde la UI Web.")
         
         return server.adapter_result
+
+       
 
     # --- Métodos del Protocolo (con textos guía) ---
 
@@ -93,7 +101,8 @@ class WebInterface:
     def preview_sheet(self, sheet: np.ndarray) -> str:
         prompt = "Revisa la hoja generada. Puedes confirmar, intercambiar (S) o cancelar (ESC)."
         result = self._wait_for_action("preview_sheet", image=sheet, prompt=prompt)
-        return str(result.get("action", "cancel"))
+        # El interceptor ya ha filtrado "cancel", así que aquí solo llegan "confirm" o "swap"
+        return str(result.get("action", "confirm"))
 
     def show_issues(self, issues: tuple[Issue, ...]) -> str:
         issue_messages = {
