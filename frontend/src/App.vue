@@ -34,17 +34,7 @@
             {{ index + 1 }}
           </span>
         </template>
-            <!-- Modal de Cancelación Transversal -->
-        <div v-if="showCancelModal" class="modal-overlay">
-          <div class="modal-content">
-            <h2>¿Cancelar el proceso?</h2>
-            <p>Se abortará el procesamiento actual y se perderán los datos.</p>
-            <div class="modal-controls">
-              <button @click="cerrarModalCancelacion">No, volver (ENTER)</button>
-              <button @click="confirmarCancelacionTotal">Sí, cancelar todo (ESC)</button>
-            </div>
-          </div>
-        </div>
+
         <!-- Modal de Advertencias No Fatales (show_issues) -->
         <div v-if="currentState === 'show_issues'" class="modal-overlay">
           <div class="modal-content">
@@ -73,6 +63,17 @@
             <div class="modal-controls">
               <button @click="enviarAccion('restart')">Reiniciar (R)</button>
               <button @click="abrirModalCancelacion">Cancelar (ESC)</button>
+            </div>
+          </div>
+        </div>
+          <!-- Modal de Cancelación Transversal -->
+        <div v-if="showCancelModal" class="modal-overlay" style="z-index: 2000;">
+          <div class="modal-content">
+            <h2>¿Cancelar el proceso?</h2>
+            <p>Se abortará el procesamiento actual y se perderán los datos.</p>
+            <div class="modal-controls">
+              <button @click="cerrarModalCancelacion">No, volver (ENTER)</button>
+              <button @click="confirmarCancelacionTotal">Sí, cancelar todo (ESC)</button>
             </div>
           </div>
         </div>
@@ -293,18 +294,22 @@ function handleKeydown(event: KeyboardEvent) {
       enviarAccion('swap');
     }
   } else if (currentState.value === 'show_issues') {
-    // ¡NUEVO! Atajos para el modal de advertencias
     if (event.key === 'Enter') {
       enviarAccion('continue');
     } else if (event.key.toLowerCase() === 'r') {
       enviarAccion('restart');
     }
+    // ¡NUEVO! Si es cualquier otra tecla (incluido ESC), no hacemos nada.
+    return; 
+    
   } else if (currentState.value === 'show_error') {
-    // ¡NUEVO! Aquí ENTER no hace nada, solo R funciona
     if (event.key.toLowerCase() === 'r') {
       enviarAccion('restart');
+      return; // Salimos si es R
     }
+    // Si es ESC, dejamos que el flujo caiga hasta el "if" global del final
   }
+
 
   // La tecla ESC es transversal y funciona en cualquier estado
   if (event.key === 'Escape') {
@@ -357,7 +362,6 @@ function handleImageClick(event: MouseEvent) {
     yReal: Math.round(yReal)
   });
 }
-
 
 // Le decimos al navegador que empiece a escuchar cuando el componente se monta
 onMounted(() => {
