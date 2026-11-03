@@ -4,6 +4,9 @@
       <p v-if="isBackendDisconnected" style="color: red; font-weight: bold;">
         Proceso finalizado o cancelado. Puedes cerrar esta pestaña.
       </p>
+      <p v-else-if="currentState === 'show_success'" style="color: #4CAF50; font-weight: bold;">
+        ¡PDF generado exitosamente!
+      </p>
       <p v-else-if="isSwapping" style="font-weight: bold;">
         Intercambiando caras...
       </p>
@@ -11,6 +14,7 @@
     </header>
 
     <main 
+      v-if="currentState !== 'show_success'"
       class="canvas-area" 
       :class="{ 'canvas-disabled': isBackendDisconnected }"
     >
@@ -80,6 +84,13 @@
       </div>
     </main>
 
+    <!-- Mensaje de Éxito (Fuera del main) -->
+    <div v-if="currentState === 'show_success'" class="success-container">
+      <h1>¡Proceso Completado!</h1>
+      <p>El PDF se ha generado y guardado correctamente.</p>
+      <p>Pulse Enter para abrir el pdf y cierre esta ventana</p>
+    </div>
+
     <footer class="bottom-bar">
       
       <!-- Controles para el Estado 1: Selección de esquinas -->
@@ -100,10 +111,18 @@
         @click="enviarAccion('swap')" 
         :disabled="isBackendDisconnected || isSwapping"
       >
+
         Intercambiar (S)
       </button>
         <button @click="abrirModalCancelacion" :disabled="isBackendDisconnected">Cancelar (ESC)</button>
         <button @click="enviarAccion('confirm')" :disabled="isBackendDisconnected">Confirmar (ENTER)</button>
+      </div>
+
+      <!-- Controles para el Estado 5: Éxito -->
+      <div v-else-if="currentState === 'show_success'" class="controls">
+        <button @click="enviarAccion('confirm')" :disabled="isBackendDisconnected">
+          Entendido (ENTER)
+        </button>
       </div>
 
     </footer>
@@ -308,6 +327,13 @@ function handleKeydown(event: KeyboardEvent) {
       return; // Salimos si es R
     }
     // Si es ESC, dejamos que el flujo caiga hasta el "if" global del final
+
+  } else if (currentState.value === 'show_success') {
+    // ¡NUEVO! Al pulsar ENTER, enviamos 'confirm' para desbloquear Python
+    if (event.key === 'Enter') {
+      enviarAccion('confirm');
+    }
+    return; // Evitamos que otras teclas hagan cosas raras
   }
 
 
@@ -520,5 +546,30 @@ button:hover:not(:disabled) {
 
 .modal-close-x:hover {
   color: #333;
+}
+
+.success-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  text-align: center;
+  height: 100%; /* Ocupa todo el área central */
+}
+
+.success-container h1 {
+  color: #4CAF50;
+  margin-bottom: 15px;
+}
+
+.success-container {
+  flex: 1; /* Ocupa el espacio sobrante */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  text-align: center;
 }
 </style>
