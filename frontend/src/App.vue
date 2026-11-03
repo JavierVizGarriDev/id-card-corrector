@@ -45,6 +45,22 @@
             </div>
           </div>
         </div>
+        <!-- Modal de Advertencias No Fatales (show_issues) -->
+        <div v-if="currentState === 'show_issues'" class="modal-overlay">
+          <div class="modal-content">
+            <!-- El botón de la X (cerrar) -->
+            <button class="modal-close-x" @click="enviarAccion('restart')">×</button>
+            
+            <h2>Advertencia</h2>
+            <!-- Aquí mostramos el texto que viene de Python -->
+            <p style="white-space: pre-wrap;">{{ promptText }}</p>
+            
+            <div class="modal-controls">
+              <button @click="enviarAccion('restart')">Volver a seleccionar (R)</button>
+              <button @click="enviarAccion('continue')">Continuar de todos modos (ENTER)</button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -95,6 +111,8 @@ let pollingInterval: ReturnType<typeof setInterval> | null = null;
 let pollingFailures = 0;
 
 const isBackendDisconnected = ref(false);
+
+const promptText = ref('');
 
 // Creamos una referencia reactiva para el estado de la UI
 const currentState = ref('select_corners');
@@ -210,6 +228,11 @@ async function checkState() {
     if (data.image_version && data.image_version !== currentImageVersion.value) {
       currentImageVersion.value = data.image_version;
       await fetchImage();
+    }
+
+    // Sincronizamos el texto de la advertencia
+    if (data.prompt) {
+      promptText.value = data.prompt;
     }
 
   } catch (error) {
@@ -446,5 +469,25 @@ button:hover:not(:disabled) {
   filter: grayscale(100%); /* Pone la imagen en blanco y negro */
   pointer-events: none; /* Bloquea los clics del ratón en toda esta zona */
   transition: all 0.5s ease; /* Hace que el cambio sea suave, no un golpe brusco */
+}
+
+.modal-content {
+  position: relative; /* Necesario para posicionar la X */
+}
+
+.modal-close-x {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+}
+
+.modal-close-x:hover {
+  color: #333;
 }
 </style>
