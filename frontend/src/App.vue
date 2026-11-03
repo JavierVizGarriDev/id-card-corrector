@@ -264,7 +264,7 @@ function handleKeydown(event: KeyboardEvent) {
     }
     return; // Salimos para que no afecte a los atajos de la app de fondo
   }
- // --- NUEVO: Lógica contextual por estado ---
+ // Lógica contextual por estado ---
   if (currentState.value === 'select_corners') {
     if (event.key === 'Enter' && puntos.value.length === 4) {
       enviarAccion('confirm', puntos.value);
@@ -276,6 +276,13 @@ function handleKeydown(event: KeyboardEvent) {
       enviarAccion('confirm');
     } else if (event.key.toLowerCase() === 's') {
       enviarAccion('swap');
+    }
+  } else if (currentState.value === 'show_issues') {
+    // ¡NUEVO! Atajos para el modal de advertencias
+    if (event.key === 'Enter') {
+      enviarAccion('continue');
+    } else if (event.key.toLowerCase() === 'r') {
+      enviarAccion('restart');
     }
   }
 
