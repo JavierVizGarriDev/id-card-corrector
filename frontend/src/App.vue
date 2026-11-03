@@ -61,6 +61,21 @@
             </div>
           </div>
         </div>
+        <!-- Modal de Errores Fatales (show_error) -->
+        <div v-if="currentState === 'show_error'" class="modal-overlay">
+          <div class="modal-content">
+            <!-- La X actúa como Reiniciar -->
+            <button class="modal-close-x" @click="enviarAccion('restart')">×</button>
+            
+            <h2 style="color: #d32f2f;">Error Crítico</h2>
+            <p style="white-space: pre-wrap;">{{ promptText }}</p>
+            
+            <div class="modal-controls">
+              <button @click="enviarAccion('restart')">Reiniciar (R)</button>
+              <button @click="abrirModalCancelacion">Cancelar (ESC)</button>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -282,6 +297,11 @@ function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter') {
       enviarAccion('continue');
     } else if (event.key.toLowerCase() === 'r') {
+      enviarAccion('restart');
+    }
+  } else if (currentState.value === 'show_error') {
+    // ¡NUEVO! Aquí ENTER no hace nada, solo R funciona
+    if (event.key.toLowerCase() === 'r') {
       enviarAccion('restart');
     }
   }
