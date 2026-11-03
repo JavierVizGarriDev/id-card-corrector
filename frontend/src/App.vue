@@ -4,6 +4,9 @@
       <p v-if="isBackendDisconnected" style="color: red; font-weight: bold;">
         Proceso finalizado o cancelado. Puedes cerrar esta pestaña.
       </p>
+      <p v-else-if="isSwapping" style="font-weight: bold;">
+        Intercambiando caras...
+      </p>
       <p v-else>Estado actual: {{ currentState }}</p>
     </header>
 
@@ -18,7 +21,6 @@
           alt="Carnet de identidad" 
           class="canvas-image" 
           @click="handleImageClick" 
-          @load="handleImageLoad"
         />
         
         <!-- Recorremos el array de puntos con v-for -->
@@ -62,9 +64,14 @@
 
       <!-- Controles para el Estado 2: Previsualización -->
       <div v-else-if="currentState === 'preview_sheet'" class="controls">
-        <button :disabled="isBackendDisconnected">Intercambiar (S)</button>
+      <button 
+        @click="enviarAccion('swap')" 
+        :disabled="isBackendDisconnected || isSwapping"
+      >
+        Intercambiar (S)
+      </button>
         <button @click="abrirModalCancelacion" :disabled="isBackendDisconnected">Cancelar (ESC)</button>
-        <button :disabled="isBackendDisconnected">Confirmar (ENTER)</button>
+        <button @click="enviarAccion('confirm')" :disabled="isBackendDisconnected">Confirmar (ENTER)</button>
       </div>
 
     </footer>
@@ -101,8 +108,7 @@ const imageUrl = ref('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53
 // Array reactivo para guardar hasta 4 puntos
 const puntos = ref<Punto[]>([]);
 
-// Variables para guardar el tamaño real de la imagen
-const dimensionesReales = ref({ ancho: 0, alto: 0 });
+const isSwapping = ref(false);
 
 // Variable para controlar la visibilidad del modal de cancelación
 const showCancelModal = ref(false);
@@ -134,6 +140,9 @@ async function fetchImage() {
       
       //Si llega una imagen nueva, limpiamos los puntos anteriores
       puntos.value = [];
+
+      // Si estábamos esperando por un swap, ya ha llegado
+      isSwapping.value = false;
     }
   } catch (error) {
     console.error('Error al descargar la imagen:', error);
@@ -160,22 +169,18 @@ async function enviarAccion(action: string, corners?: any[]) {
       throw new Error('Error al enviar la acción');
     }
 
-    // ¡NUEVO! Si la acción fue exitosa, limpiamos los puntos de la pantalla
+    // Si la acción es swap, activamos el modo "esperando imagen"
+    if (action === 'swap') {
+      isSwapping.value = true;
+    }
+
+    // Si la acción fue exitosa, limpiamos los puntos de la pantalla
     // Esto cubre el caso de las dos imágenes y evita clics accidentales.
     puntos.value = []; 
 
   } catch (error) {
     console.error('Error enviando acción:', error);
   }
-}
-
-// Función que se ejecuta cuando la imagen termina de cargar
-function handleImageLoad(event: Event) {
-  const img = event.target as HTMLImageElement;
-  dimensionesReales.value = {
-    ancho: img.naturalWidth,
-    alto: img.naturalHeight
-  };
 }
 
 function reiniciarSeleccion() {
@@ -227,7 +232,7 @@ async function checkState() {
 function handleKeydown(event: KeyboardEvent) {
     // Si el backend está muerto, ignoramos cualquier atajo de teclado
   if (isBackendDisconnected.value) return;
-    // --- NUEVO: Aduana del Modal de Cancelación ---
+    // --- Aduana del Modal de Cancelación ---
   if (showCancelModal.value) {
     if (event.key === 'Enter') {
       cerrarModalCancelacion(); // "No, volver"
@@ -236,48 +241,73 @@ function handleKeydown(event: KeyboardEvent) {
     }
     return; // Salimos para que no afecte a los atajos de la app de fondo
   }
-  if (event.key === 'Enter') {
-    // Solo enviamos si hay 4 puntos
-    if (puntos.value.length === 4) {
-      enviarAccion('confirm', puntos.value); 
+ // --- NUEVO: Lógica contextual por estado ---
+  if (currentState.value === 'select_corners') {
+    if (event.key === 'Enter' && puntos.value.length === 4) {
+      enviarAccion('confirm', puntos.value);
+    } else if (event.key.toLowerCase() === 'r') {
+      reiniciarSeleccion();
     }
-  } else if (event.key === 'Escape') {
+  } else if (currentState.value === 'preview_sheet') {
+    if (event.key === 'Enter') {
+      enviarAccion('confirm');
+    } else if (event.key.toLowerCase() === 's') {
+      enviarAccion('swap');
+    }
+  }
+
+  // La tecla ESC es transversal y funciona en cualquier estado
+  if (event.key === 'Escape') {
     abrirModalCancelacion();
-  } else if (event.key.toLowerCase() === 'r') {
-    reiniciarSeleccion();
   }
 }
-
 // Función que se ejecuta cada vez que se hace clic en la imagen
 function handleImageClick(event: MouseEvent) {
   if (puntos.value.length >= 4) return;
 
   const img = event.target as HTMLImageElement;
   
-  // 1. Tamaño en pantalla
-  const anchoPantalla = img.clientWidth;
-  const altoPantalla = img.clientHeight;
+  // 1. Tamaños reales (los píxeles del archivo)
+  const anchoReal = img.naturalWidth;
+  const altoReal = img.naturalHeight;
 
-  // 2. Tamaño real
-  const anchoReal = dimensionesReales.value.ancho;
-  const altoReal = dimensionesReales.value.alto;
+  // 2. Tamaño de la caja (la etiqueta HTML)
+  const anchoCaja = img.clientWidth;
+  const altoCaja = img.clientHeight;
 
-  // 3. Regla de tres
-  const ratioX = anchoReal / anchoPantalla;
-  const ratioY = altoReal / altoPantalla;
+  // 3. Calcular la escala (cuánto se ha encogido la imagen en pantalla)
+  const escala = Math.min(anchoCaja / anchoReal, altoCaja / altoReal);
+  
+  // 4. Calcular el tamaño real que ocupa la foto DIBUJADA en la caja
+  const anchoDibujado = anchoReal * escala;
+  const altoDibujado = altoReal * escala;
 
-  // 4. Coordenadas reales
-  const xReal = event.offsetX * ratioX;
-  const yReal = event.offsetY * ratioY;
+  // 5. Calcular los márgenes invisibles (letterboxing)
+  const margenX = (anchoCaja - anchoDibujado) / 2;
+  const margenY = (altoCaja - altoDibujado) / 2;
 
-  // 5. Guardamos ambas
+  // 6. Obtener la posición del clic relativa a la FOTO (restamos el margen)
+  const clicX = event.offsetX - margenX;
+  const clicY = event.offsetY - margenY;
+
+  // 7. Control de seguridad: si el clic cae en el fondo negro (fuera de la foto), lo ignoramos
+  if (clicX < 0 || clicY < 0 || clicX > anchoDibujado || clicY > altoDibujado) {
+    return; 
+  }
+
+  // 8. Regla de tres final para obtener los píxeles reales
+  const xReal = clicX * (anchoReal / anchoDibujado);
+  const yReal = clicY * (altoReal / altoDibujado);
+
+  // 9. Guardamos las coordenadas
   puntos.value.push({
-    xPantalla: event.offsetX,
+    xPantalla: event.offsetX, // Guardamos el clic original para pintar el punto verde donde tocaste
     yPantalla: event.offsetY,
     xReal: Math.round(xReal),
     yReal: Math.round(yReal)
   });
 }
+
 
 // Le decimos al navegador que empiece a escuchar cuando el componente se monta
 onMounted(() => {
