@@ -30,3 +30,13 @@ src/id_card_corrector/ui/web/static/
 
 # Script de apertura rapida en UI web
 Iniciar_ui_web.bat
+
+# PyInstaller
+build/
+dist/
+frontend_dist/
+*.spec
+
+# Archivos locales (lanzadores, logs, etc.)
+*.bat
+*.log

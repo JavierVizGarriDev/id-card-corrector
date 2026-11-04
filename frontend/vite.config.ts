@@ -11,5 +11,10 @@ export default defineConfig({
         changeOrigin: true,
       }
     }
+  },
+  // --- NUEVO: Configuración de compilación para producción ---
+  build: {
+    // Evita que Vite genere una carpeta 'dist' que choque con la que crea PyInstaller
+    outDir: 'frontend_dist', 
   }
 })

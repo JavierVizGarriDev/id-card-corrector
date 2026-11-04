@@ -3,7 +3,11 @@
 import base64
 import threading
 from typing import Any
+import sys
+import os
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import cv2
 import numpy as np
 from fastapi import FastAPI
@@ -65,3 +69,29 @@ def set_image_for_display(image: np.ndarray) -> None:
         state.image_version += 1
     else:
         state.image_b64 = ""
+
+# --- Configuración para producción / PyInstaller ---
+# Detecta si estamos ejecutando el .exe empaquetado o el código fuente
+if getattr(sys, 'frozen', False):
+    # Ruta donde PyInstaller descomprime los archivos (ej. .../_MEIPASS/frontend/dist)
+    base_dir = sys._MEIPASS
+else:
+    # Ruta relativa desde src/id_card_corrector/ui/web/server.py hasta frontend/dist
+    base_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+
+frontend_dist = os.path.join(base_dir, "frontend", "frontend_dist")
+
+# Solo montamos si la carpeta existe (evita errores si se ejecuta en modo dev sin build)
+if os.path.isdir(frontend_dist):
+    # 1. Monta los assets (JS, CSS) para que el navegador los cargue
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+    
+    # 2. Ruta "catch-all" para servir el index.html en cualquier otra ruta (SPA)
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Si la ruta solicitada es un archivo existente (ej. favicon), lo devuelve
+        file_path = os.path.join(frontend_dist, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        # Si no, devuelve el index.html para que Vue maneje la ruta
+        return FileResponse(os.path.join(frontend_dist, "index.html"))

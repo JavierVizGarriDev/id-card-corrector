@@ -9,6 +9,7 @@ import subprocess
 import urllib.request
 import urllib.error
 import atexit
+import sys
 
 import numpy as np
 import uvicorn
@@ -53,8 +54,9 @@ class WebInterface:
         time.sleep(1.5)
         self._server_started = True
 
-        # Guardamos el proceso en la variable de instancia
-        self._vite_process = subprocess.Popen("npm run dev", cwd="frontend", shell=True)
+        # Solo lanzamos Vite si NO estamos en el .exe empaquetado
+        if not getattr(sys, 'frozen', False):
+            self._vite_process = subprocess.Popen("npm run dev", cwd="frontend", shell=True)
 
     def _wait_for_vite(self, url: str, retries: int = 3, delay: int = 2) -> None:
         """Hace peticiones a Vite hasta que responda o se agoten los reintentos."""
@@ -88,9 +90,14 @@ class WebInterface:
         
         # <--- Arreglo 2: Abrir el navegador apuntando a Vite (5173)
         if not self._browser_opened:
-            vite_url = "http://localhost:5173"
-            self._wait_for_vite(vite_url) # Espera activa con reintentos
-            webbrowser.open(vite_url)
+            if getattr(sys, 'frozen', False):
+                # Si es el .exe, abrimos el puerto 8000 directo
+                webbrowser.open(f"http://127.0.0.1:{self.port}")
+            else:
+                # Si es desarrollo, esperamos a Vite y abrimos el 5173
+                vite_url = "http://localhost:5173"
+                self._wait_for_vite(vite_url) 
+                webbrowser.open(vite_url)
             self._browser_opened = True
             
         success = self._event.wait(timeout=1800)
