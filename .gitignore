@@ -27,3 +27,6 @@ frontend/dist/
 
 # Archivos compilados de Vite (se generan con npm run build)
 src/id_card_corrector/ui/web/static/
+
+# Script de apertura rapida en UI web
+Iniciar_ui_web.bat
