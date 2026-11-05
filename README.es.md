@@ -1,79 +1,82 @@
 # id-card-corrector
 
-Una herramienta modular para corregir la perspectiva de fotos de carnets de identidad y generar PDFs listos para imprimir.
+Una herramienta modular para corregir la perspectiva de fotos de carnets de identidad y generar PDFs listos para imprimir, con una moderna interfaz web (Web UI) y un ejecutable autónomo (Standalone Executable).
 
-> [English](README.md) · Español
+> [English](README.md) · Versión en español
 
 ---
 
 ## Resumen
 
-En la imprenta donde trabajo, los clientes suelen enviar fotos de sus carnets de identidad para hacer copias o imprimirlas. Estas fotos casi siempre están tomadas en ángulo, mal encuadradas y necesitan ser redimensionadas a sus dimensiones físicas reales. El proceso manual en Photoshop (corregir la perspectiva, redimensionar, repetir para el reverso y acomodar ambas caras en una hoja carta) tomaba unos 5 minutos por documento.
+En la imprenta donde trabajo, los clientes suelen enviar fotos de sus carnets de identidad para imprimirlos. Estas fotos casi siempre están tomadas en ángulo, mal encuadradas y necesitan ser redimensionadas a sus dimensiones físicas reales. El proceso manual en Photoshop (corregir la perspectiva, redimensionar, repetir para el reverso y montar ambos en una hoja Carta) tomaba unos 5 minutos por documento.
 
-**id-card-corrector** automatiza este flujo de trabajo. Abre una ventana donde haces clic en las cuatro esquinas del carnet, aplica una transformación de perspectiva, redimensiona el resultado al estándar exacto ID-1 (85.6 × 53.98 mm a 300 DPI) y compone ambas caras (anverso y reverso) en una sola hoja tamaño carta. La salida final es un PDF listo para imprimir.
+**id-card-corrector** automatiza este flujo de trabajo. Proporciona una interfaz web ágil y responsiva donde haces clic en las cuatro esquinas del carnet. El backend aplica una transformación de perspectiva, redimensiona el resultado al estándar exacto ID-1 (85.6 × 53.98 mm a 300 DPI) y compone ambos lados (anverso y reverso) en una sola hoja tamaño Carta. El resultado final es un PDF listo para imprimir.
 
-Construido como la primera herramienta dentro de una visión a largo plazo de utilidades modulares para imprenta que eventualmente se integrarán en un Hub central (CLI o FastAPI).
+Construido con un núcleo en Python fuertemente testeado y una arquitectura desacoplada, esta es la primera herramienta de una visión a largo plazo de utilidades modulares para imprentas que eventualmente se integrarán en un Hub central.
 
 ---
 
 ## ✨ Características
 
-- **Corrección manual de perspectiva** — Haz clic en las cuatro esquinas del carnet usando una ventana de OpenCV. La transformación endereza la imagen.
-- **Tamaño real** — La salida se redimensiona a las dimensiones exactas del estándar ID-1 (1011 × 638 px a 300 DPI).
-- **Composición inteligente de la hoja** — Coloca el anverso y el reverso lado a lado (o apilados) en una hoja carta de EE. UU., con márgenes iguales.
-- **Previsualización con swap** — Antes de generar el PDF, puedes pulsar `S` para intercambiar el anverso y el reverso si están en el orden incorrecto.
-- **Manejo de casos límite** — Si un carnet es demasiado grande para la hoja (incluso rotado), la herramienta guarda las imágenes corregidas como JPGs sueltos en lugar de fallar.
-- **UI adaptable** *(actualmente basada en OpenCV, ver limitaciones)* — La ventana se escala para adaptarse a la pantalla, pero los elementos de la UI no son totalmente responsivos.
+- **Interfaz Web Moderna** — Construida con Vue 3 y TypeScript. Totalmente responsiva, con diseño de cero scroll (sin barras de desplazamiento) y muy rápida.
+- **Corrección manual de perspectiva** — Selección intuitiva de esquinas con retroalimentación visual en tiempo real (puntos verdes).
+- **Dimensiones reales** — La salida se redimensiona a las dimensiones exactas ID-1 (1011 × 638 px a 300 DPI).
+- **Composición inteligente de la hoja** — Coloca el anverso y el reverso lado a lado (o apilados) en una hoja Carta, con márgenes iguales.
+- **Previsualización con intercambio** — Antes de generar el PDF, puedes presionar `S` o hacer clic en un botón para intercambiar las caras frontal y trasera si están en el orden incorrecto.
+- **Atajos de teclado** — Soporte completo de teclado (`ENTER`, `ESC`, `R`, `S`) para un flujo de trabajo más rápido.
+- **Lanzador autónomo** — Incluye un ejecutable de PyInstaller que inicia el servidor y abre tu navegador con un simple doble clic (no requiere Python ni Node.js).
+- **Manejo de casos límite** — Si un carnet es demasiado grande para la hoja, la herramienta guarda las imágenes corregidas como JPGs independientes en lugar de fallar.
 
 ---
 
-## 🛠️ Tecnologías
+## 🛠️ Stack Tecnológico
 
 | Capa | Tecnología |
 |---|---|
-| Lógica central | Python 3.11+ |
+| Lógica central (Core) | Python 3.11+ |
 | Procesamiento de imágenes | OpenCV, NumPy |
 | Generación de PDF | Pillow |
-| UI (MVP) | OpenCV HighGUI |
-| Testing | pytest (más de 500 tests) |
+| API del Backend | FastAPI, Uvicorn |
+| Interfaz Frontend | Vue 3, Vite, TypeScript |
+| Arquitectura | Hexagonal (Puertos y Adaptadores) |
+| Testing | pytest (más de 520 tests para la lógica central) |
 | Empaquetado | PyInstaller |
-
-Sin frameworks de frontend, sin pasos de compilación. Toda la aplicación se ejecuta desde la terminal.
 
 ---
 
-## 🚀 Cómo ejecutar (Desde el código fuente)
+## 🚀 Cómo ejecutar
 
-1. Clona el repositorio y accede a la carpeta:
+### Opción 1: Ejecutable Autónomo (Windows)
+1. Ve a la página de [Releases](https://github.com/JavierVizGarriDev/id-card-corrector/releases) y descarga `IDCardCorrector.exe`.
+2. Crea una carpeta llamada `entrada/` junto al `.exe` y coloca tus fotos dentro (1 o 2 imágenes por carnet).
+3. Haz doble clic en el `.exe`. El servidor se iniciará y tu navegador predeterminado se abrirá automáticamente.
+4. El PDF de salida se guardará en la carpeta `salida/`.
+
+### Opción 2: Desde el Código Fuente (Desarrollo)
+1. Clona el repositorio y navega a la carpeta:
    ```bash
    git clone https://github.com/JavierVizGarriDev/id-card-corrector.git
    cd id-card-corrector
    ```
-
-2. Crea y activa un entorno virtual:
+2. Configura el backend de Python:
    ```bash
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1  # Windows
-   ```
-
-3. Instala el paquete en modo editable (incluyendo dependencias de desarrollo):
-   ```bash
    pip install -e ".[dev]"
    ```
-
-4. Prepara tu entrada:
-   Crea una carpeta llamada `entrada/` en la raíz del proyecto y coloca dentro 1 o 2 fotos de carnets (`.jpg`, `.jpeg`, `.png`). El programa creará la carpeta `salida/` automáticamente.
-
-5. Ejecuta la aplicación:
+3. Configura el frontend de Vue:
    ```bash
-   python -m id_card_corrector
+   cd frontend
+   npm install
+   cd ..
+   ```
+4. Prepara tu entrada: Crea una carpeta llamada `entrada/` en la raíz y coloca tus fotos de carnet allí.
+5. Ejecuta la aplicación (esto inicia automáticamente el backend y Vite):
+   ```bash
+   python -m id_card_corrector --ui web
    ```
 
-6. Sigue las instrucciones en pantalla:
-   - Haz clic en las cuatro esquinas del carnet en orden (sup. izq., sup. der., inf. der., inf. izq.).
-   - Pulsa `ENTER` para confirmar.
-   - Si hay dos imágenes, pulsa `S` en la previsualización para intercambiarlas, o `ENTER` para confirmar.
-   - El PDF se guardará en `salida/`.
+*(Nota: Aún puedes usar la antigua interfaz de OpenCV ejecutando `python -m id_card_corrector --ui opencv`)*
 
 ---
 
@@ -84,58 +87,57 @@ id-card-corrector/
 ├── src/
 │   └── id_card_corrector/
 │       ├── config.py          # Especificaciones físicas (carnet, hoja, márgenes)
-│       ├── geometry.py        # Transformación de perspectiva y validación geométrica
+│       ├── geometry.py        # Transformación de perspectiva y validación
 │       ├── io_utils.py        # Entrada/Salida de imágenes y PDFs
-│       ├── composer.py        # Lógica de layout y renderizado de la hoja
-│       ├── selector.py        # Selección interactiva de esquinas (UI)
-│       ├── preview.py         # Previsualización con swap (UI)
+│       ├── composer.py        # Lógica de diseño y renderizado de la hoja
 │       ├── pipeline.py        # Orquestador
-│       └── cli.py             # Punto de entrada por línea de comandos
-├── tests/
-├── entrada/                   # Fotos de entrada (ignorado por git)
-├── salida/                    # PDFs generados (ignorado por git)
-├── pyproject.toml
-└── README.md
+│       ├── cli.py             # Punto de entrada de línea de comandos
+│       └── ui/                # Adaptadores de UI
+│           ├── interface.py   # Definición del Protocolo (UserInterface)
+│           ├── opencv/        # Interfaz antigua de OpenCV
+│           └── web/           # Servidor Web y Adaptador FastAPI
+├── frontend/                  # Aplicación en Vue 3 + TypeScript
+├── tests/                     # Más de 520 tests unitarios
+├── launcher.py                # Punto de entrada para PyInstaller
+├── entrada/                   # Fotos de entrada (ignorado en git)
+├── salida/                    # PDFs de salida (ignorado en git)
+└── pyproject.toml
 ```
 
 ---
 
 ## 🧠 Notas de diseño
 
-El proyecto sigue una arquitectura modular y por capas:
+El proyecto sigue una **Arquitectura Hexagonal (Puertos y Adaptadores)**:
+- **Los módulos de lógica pura** (`geometry`, `composer`) son completamente independientes de la UI y del sistema de archivos.
+- **El Pipeline** (`pipeline.py`) orquesta el proceso y se comunica exclusivamente a través del protocolo `UserInterface`.
+- **Los Adaptadores de UI** (`opencv` y `web`) implementan este protocolo. A la lógica central no le importa si el usuario está haciendo clic en una ventana de OpenCV o en un componente de Vue.js en un navegador. Este es el principio de la **"UI Tonta"**: todo el trabajo pesado ocurre en Python.
 
-- Los **módulos de lógica pura** (`geometry`, `composer`) son independientes de la UI y del sistema de archivos, y están cubiertos por tests unitarios.
-- La **entrada/salida y la orquestación** (`io_utils`, `pipeline`) conectan la lógica pura con el mundo real.
-- Los **módulos de UI** (`selector`, `preview`) están aislados y serán reemplazados en un futuro refactor.
-
-Esta separación hace que el núcleo sea testeable (más de 500 tests) y permite cambiar la UI sin reescribir la lógica de negocio.
+Esta separación hace que el núcleo sea altamente testeable (más de 520 tests pasando) y permite intercambiar las interfaces sin reescribir la lógica de negocio.
 
 ---
 
 ## ⚠️ Limitaciones actuales
 
-- **La UI de OpenCV no es responsiva** — Los tamaños de texto, las alturas de los banners y los radios de los puntos son fijos. En un monitor 4K, los elementos pueden verse pequeños; en una pantalla pequeña, pueden verse demasiado grandes. La ventana escala la imagen, pero los elementos de la UI no escalan dinámicamente.
-- **Sin tests automatizados para la capa de UI** — Mockear `cv2.imshow` y `cv2.waitKey` es frágil. La máquina de estados (`selector.process_event`) está completamente testeada, pero el bucle de renderizado de OpenCV se valida manualmente.
-- **Sin arrastrar y soltar** — La selección de esquinas requiere hacer clic en los cuatro puntos. No hay forma de ajustar un punto después de colocarlo (debes pulsar `R` para reiniciar).
-- **El flujo de una sola tarjeta no tiene previsualización** — Con una sola imagen, el PDF se genera directamente, sin la pantalla de intercambio/confirmación.
-- **Los márgenes no son configurables por el usuario** — El margen maestro es una constante (`MARGIN_MM`), ajustada en el código. Una futura UI podría exponerlo.
+- **Sin arrastrar y soltar para las esquinas** — La selección de esquinas requiere hacer clic en los cuatro puntos. No hay forma de ajustar un punto después de colocarlo (debes presionar `R` para reiniciar).
+- **El flujo de un solo carnet no tiene previsualización** — Con una sola imagen, el PDF se genera directamente, sin la pantalla de intercambio/confirmación.
+- **Los márgenes no son configurables por el usuario** — El margen maestro es una constante (`MARGIN_MM`), ajustada en el código.
 
 ---
 
 ## 🗺️ Hoja de ruta (Roadmap)
 
-- **Refactor de la UI (siguiente hito)** — Aislar la UI detrás de una interfaz `Protocol`. Construir una UI basada en web (FastAPI + HTML/JS) que sea totalmente responsiva, moderna y fácil de extender. Mantener la UI de OpenCV como respaldo para uso en terminal.
-- **Detección automática de esquinas** — Usar visión por computadora (homografía, detección de bordes) para sugerir los límites del carnet sin clics manuales.
-- **Soporte para múltiples tipos de carnet** — Añadir carnets de ONAT, licencias de conducir y tamaños personalizados al diccionario `SPECS`.
-- **Procesamiento por lotes** — Procesar múltiples carnets en una sola ejecución (actualmente limitado a 1 o 2 imágenes).
-- **Márgenes configurables por el usuario** — Exponer `MARGIN_MM` en la UI.
-- **Integración con un Hub central** — Conectar `id-card-corrector` con otras herramientas de imprenta (ej. `printable-photo-grid`) a través de una CLI o API compartida.
+- **Editor visual de PDF** — Permitir a los usuarios ajustar manualmente el PDF compuesto antes de imprimir.
+- **Detección automática de esquinas** — Usar visión artificial para sugerir los límites del carnet sin necesidad de clics manuales.
+- **Soporte para múltiples tipos de carnets** — Añadir carnets ONAT, licencias de conducir y tamaños personalizados.
+- **Procesamiento por lotes** — Procesar múltiples carnets en una sola ejecución.
+- **Integración con un Hub central** — Conectar con otras herramientas para imprentas a través de una CLI o API compartida.
 
 ---
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT — consulta el archivo [LICENSE](LICENSE) para más detalles.
+Este proyecto está licenciado bajo la Licencia MIT — consulta el archivo [LICENSE](LICENSE) para más detalles.
 
 ---
 
@@ -147,4 +149,4 @@ Este proyecto está bajo la Licencia MIT — consulta el archivo [LICENSE](LICEN
 
 ---
 
-*Mi cuarto proyecto. Creado para automatizar un flujo de trabajo real en una imprenta.*
+*Mi cuarto proyecto. Construido para automatizar un flujo de trabajo real en una imprenta.*

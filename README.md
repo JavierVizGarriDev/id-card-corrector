@@ -1,6 +1,6 @@
 # id-card-corrector
 
-A modular tool to correct perspective from ID card photos and generate print-ready PDFs.
+A modular tool to correct perspective from ID card photos and generate print-ready PDFs, featuring a modern Web UI and a Standalone Executable.
 
 > English · [Versión en español](README.es.md)
 
@@ -8,22 +8,24 @@ A modular tool to correct perspective from ID card photos and generate print-rea
 
 ## Overview
 
-At the print shop where I work, customers often send photos of their ID cards to be copied or printed. These photos are almost always taken at an angle, poorly framed, and need to be resized to their real physical dimensions. The manual process in Photoshop (correcting perspective, resizing, repeating for the back side, and arranging both on a Letter sheet) took about 5 minutes per document.
+At the print shop where I work, customers often send photos of their ID cards to be printed. These photos are almost always taken at an angle, poorly framed, and need to be resized to their real physical dimensions. The manual process in Photoshop (correcting perspective, resizing, repeating for the back side, and arranging both on a Letter sheet) took about 5 minutes per document.
 
-**id-card-corrector** automates this workflow. It opens a window where you click the four corners of the card, applies a perspective transformation, resizes the result to the exact ID-1 standard (85.6 × 53.98 mm at 300 DPI), and composes both sides (front and back) onto a single Letter-size sheet. The final output is a print-ready PDF.
+**id-card-corrector** automates this workflow. It provides a sleek, responsive Web UI where you click the four corners of the card. The backend applies a perspective transformation, resizes the result to the exact ID-1 standard (85.6 × 53.98 mm at 300 DPI), and composes both sides (front and back) onto a single Letter-size sheet. The final output is a print-ready PDF.
 
-Built as the first tool in a long-term vision of modular print-shop utilities that will eventually integrate into a central Hub (CLI or FastAPI).
+Built with a heavily tested Python core and a decoupled architecture, this is the first tool in a long-term vision of modular print-shop utilities that will eventually integrate into a central Hub.
 
 ---
 
 ## ✨ Features
 
-- **Manual perspective correction** — Click the four corners of the card using an OpenCV window. The transformation straightens the image.
+- **Modern Web UI** — Built with Vue 3 and TypeScript. Fully responsive, zero-scroll layout, and blazing fast.
+- **Manual perspective correction** — Intuitive corner selection with real-time visual feedback (green points).
 - **Real-world sizing** — Output is resized to the exact ID-1 dimensions (1011 × 638 px at 300 DPI).
 - **Smart sheet composition** — Places the front and back side-by-side (or stacked) on a US Letter sheet, with equal margins.
-- **Preview with swap** — Before generating the PDF, you can press `S` to swap the front and back cards if they are in the wrong order.
-- **Edge-case handling** — If a card is too large for the sheet (even when rotated), the tool saves the corrected images as standalone JPGs instead of failing.
-- **Responsive UI** *(currently OpenCV-based, see limitations)* — The window scales to fit the screen, but the UI elements are not fully responsive.
+- **Preview with swap** — Before generating the PDF, you can press `S` or click a button to swap the front and back cards if they are in the wrong order.
+- **Keyboard Shortcuts** — Full keyboard support (`ENTER`, `ESC`, `R`, `S`) for a faster workflow.
+- **Standalone Launcher** — Includes a PyInstaller executable that boots the server and opens your browser with a simple double-click (no Python or Node.js required).
+- **Edge-case handling** — If a card is too large for the sheet, the tool saves the corrected images as standalone JPGs instead of failing.
 
 ---
 
@@ -34,46 +36,47 @@ Built as the first tool in a long-term vision of modular print-shop utilities th
 | Core logic | Python 3.11+ |
 | Image processing | OpenCV, NumPy |
 | PDF generation | Pillow |
-| UI (MVP) | OpenCV HighGUI |
-| Testing | pytest (500+ tests) |
+| Backend API | FastAPI, Uvicorn |
+| Frontend UI | Vue 3, Vite, TypeScript |
+| Architecture | Hexagonal (Ports and Adapters) |
+| Testing | pytest (520+ tests for the core logic) |
 | Packaging | PyInstaller |
-
-No frontend frameworks, no build step. The entire application runs from the terminal.
 
 ---
 
-## 🚀 How to Run (From Source)
+## 🚀 How to Run
 
+### Option 1: Standalone Executable (Windows)
+1. Go to the [Releases](https://github.com/JavierVizGarriDev/id-card-corrector/releases) page and download `IDCardCorrector.exe`.
+2. Create a folder named `entrada/` next to the `.exe` and place your photos inside (1 or 2 images per ID card).
+3. Double-click the `.exe`. The server will start, and your default browser will open automatically.
+4. The output PDF will be saved in the `salida/` folder.
+
+### Option 2: From Source (Development)
 1. Clone the repository and navigate to the folder:
    ```bash
    git clone https://github.com/JavierVizGarriDev/id-card-corrector.git
    cd id-card-corrector
    ```
-
-2. Create and activate a virtual environment:
+2. Set up the Python backend:
    ```bash
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1  # Windows
-   ```
-
-3. Install the package in editable mode (including dev dependencies):
-   ```bash
    pip install -e ".[dev]"
    ```
-
-4. Prepare your input:
-   Create a folder named `entrada/` in the root of the project and place 1 or 2 ID card photos (`.jpg`, `.jpeg`, `.png`) inside it. The program will create the `salida/` folder automatically.
-
-5. Run the application:
+3. Set up the Vue frontend:
    ```bash
-   python -m id_card_corrector
+   cd frontend
+   npm install
+   cd ..
+   ```
+4. Prepare your input: Create a folder named `entrada/` in the root and place your ID photos there.
+5. Run the application (this automatically starts the backend and Vite):
+   ```bash
+   python -m id_card_corrector --ui web
    ```
 
-6. Follow the on-screen instructions:
-   - Click the four corners of the card in order (top-left, top-right, bottom-right, bottom-left).
-   - Press `ENTER` to confirm.
-   - If there are two images, press `S` in the preview to swap them, or `ENTER` to confirm.
-   - The PDF will be saved to `salida/`.
+*(Note: You can still use the legacy OpenCV UI by running `python -m id_card_corrector --ui opencv`)*
 
 ---
 
@@ -87,49 +90,48 @@ id-card-corrector/
 │       ├── geometry.py        # Perspective warp and quadrilateral validation
 │       ├── io_utils.py        # Image and PDF I/O
 │       ├── composer.py        # Layout logic and sheet rendering
-│       ├── selector.py        # Interactive corner selection (UI)
-│       ├── preview.py         # Preview with swap (UI)
 │       ├── pipeline.py        # Orchestrator
-│       └── cli.py             # Command-line entry point
-├── tests/
+│       ├── cli.py             # Command-line entry point
+│       └── ui/                # UI Adapters
+│           ├── interface.py   # Protocol definition (UserInterface)
+│           ├── opencv/        # Legacy OpenCV UI
+│           └── web/           # FastAPI Web Server & Adapter
+├── frontend/                  # Vue 3 + TypeScript application
+├── tests/                     # 520+ unit tests
+├── launcher.py                # Entry point for PyInstaller
 ├── entrada/                   # Input photos (gitignored)
 ├── salida/                    # Output PDFs (gitignored)
-├── pyproject.toml
-└── README.md
+└── pyproject.toml
 ```
 
 ---
 
 ## 🧠 Design Notes
 
-The project follows a modular, layered architecture:
+The project follows a **Hexagonal Architecture (Ports and Adapters)**:
+- **Pure logic modules** (`geometry`, `composer`) are completely independent of the UI and filesystem.
+- **The Pipeline** (`pipeline.py`) orchestrates the process and communicates exclusively through the `UserInterface` protocol.
+- **UI Adapters** (`opencv` and `web`) implement this protocol. The core logic doesn't know (or care) if the user is clicking on an OpenCV window or a Vue.js component in a browser. This is the **"Dumb UI" principle**: all heavy lifting happens in Python.
 
-- **Pure logic modules** (`geometry`, `composer`) are independent of the UI and filesystem, and are covered by unit tests.
-- **I/O and orchestration** (`io_utils`, `pipeline`) connect the pure logic to the real world.
-- **UI modules** (`selector`, `preview`) are isolated and will be replaced in a future refactor.
-
-This separation makes the core testable (500+ tests) and allows the UI to be swapped without rewriting the business logic.
+This separation makes the core highly testable (520+ passing tests) and allows swapping UIs without rewriting business logic.
 
 ---
 
 ## ⚠️ Current Limitations
 
-- **OpenCV UI is not responsive** — Text sizes, banner heights, and point radii are fixed. On a 4K monitor, elements may look small; on a small screen, they may be too large. The window scales the image, but the UI elements do not scale dynamically.
-- **No automated tests for the UI layer** — Mocking `cv2.imshow` and `cv2.waitKey` is fragile. The state machine (`selector.process_event`) is fully tested, but the OpenCV rendering loop is validated manually.
-- **No drag-and-drop** — Corner selection requires clicking the four points. There is no way to adjust a point after placing it (you must press `R` to restart).
+- **No drag-and-drop for corners** — Corner selection requires clicking the four points. There is no way to adjust a point after placing it (you must press `R` to restart).
 - **Single-card flow has no preview** — With one image, the PDF is generated directly, without the swap/confirm screen.
-- **Margins are not user-configurable** — The master margin is a constant (`MARGIN_MM`), adjusted in code. A future UI could expose it.
+- **Margins are not user-configurable** — The master margin is a constant (`MARGIN_MM`), adjusted in code.
 
 ---
 
 ## 🗺️ Roadmap
 
-- **UI refactor (next milestone)** — Isolate the UI behind a `Protocol` interface. Build a web-based UI (FastAPI + HTML/JS) that is fully responsive, modern, and easy to extend. Keep the OpenCV UI as a fallback for terminal use.
-- **Automatic corner detection** — Use computer vision (homography, edge detection) to suggest the card boundaries without manual clicks.
-- **Support for multiple card types** — Add ONAT cards, driver's licenses, and custom sizes to the `SPECS` dictionary.
-- **Batch processing** — Process multiple cards in one run (currently limited to 1 or 2 images).
-- **User-configurable margins** — Expose `MARGIN_MM` in the UI.
-- **Integration with a central Hub** — Connect `id-card-corrector` with other print-shop tools (e.g., `printable-photo-grid`) through a shared CLI or API.
+- **Visual PDF Editor** — Allow users to manually adjust the composed PDF before printing.
+- **Automatic corner detection** — Use computer vision to suggest the card boundaries without manual clicks.
+- **Support for multiple card types** — Add ONAT cards, driver's licenses, and custom sizes.
+- **Batch processing** — Process multiple cards in one run.
+- **Integration with a central Hub** — Connect with other print-shop tools through a shared CLI or API.
 
 ---
 
