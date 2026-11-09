@@ -177,6 +177,8 @@ def test_cross_product_2d_translation_invariant():
     )
 
 
+
+
 # --- _cross_product_2d: dtype independence and return type ---
 
 @pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
@@ -218,18 +220,47 @@ def test_segments_intersect_is_symmetric():
     p3, p4 = np.array([0, 10]), np.array([10, 0])
     assert _segments_intersect(p1, p2, p3, p4) == _segments_intersect(p3, p4, p1, p2)
 
+def test_cross_product_2d_is_antisymmetric():
+    """Swapping p2 and p3 must negate the result.
+    
+    This is a fundamental property of the 2D cross product (determinant).
+    It verifies the implementation against a universal mathematical law,
+    not just hardcoded expected values.
+    """
+    p1 = np.array([10, 10])
+    p2 = np.array([30, 15])
+    p3 = np.array([20, 40])
+    
+    result_forward = _cross_product_2d(p1, p2, p3)
+    result_swapped = _cross_product_2d(p1, p3, p2)
+    
+    assert result_forward == pytest.approx(-result_swapped)
 
 # --- _segments_intersect: no crossing ---
 
-@pytest.mark.parametrize("p1, p2, p3, p4", [
-    # Disjoint horizontally
-    ((0, 0), (5, 5), (10, 0), (15, 5)),
-    # Parallel, no overlap
-    ((0, 0), (10, 0), (0, 5), (10, 5)),
-    # Far apart
-    ((0, 0), (1, 1), (100, 100), (101, 101)),
+@pytest.mark.parametrize("p1, p2, p3, p4, description", [
+    pytest.param(
+        (0, 0), (5, 5), (10, 3), (15, 6), 
+        "non-parallel disjoint", 
+        id="non-parallel"
+    ),
+    pytest.param(
+        (0, 0), (10, 0), (0, 5), (10, 5), 
+        "parallel, aligned x", 
+        id="parallel-aligned"
+    ),
+    pytest.param(
+        (0, 0), (10, 0), (100, 100), (110, 100), 
+        "parallel, far apart", 
+        id="parallel-far"
+    ),
+    pytest.param(
+        (0, 0), (10, 0), (5, 1), (5, 11), 
+        "one line crosses, segments don't", 
+        id="near-miss"
+    ),
 ])
-def test_segments_do_not_intersect_when_disjoint(p1, p2, p3, p4):
+def test_segments_do_not_intersect_when_disjoint(p1, p2, p3, p4, description):
     """Disjoint segments report no intersection."""
     assert _segments_intersect(
         np.array(p1, dtype=np.float64),
@@ -237,7 +268,6 @@ def test_segments_do_not_intersect_when_disjoint(p1, p2, p3, p4):
         np.array(p3, dtype=np.float64),
         np.array(p4, dtype=np.float64),
     ) is False
-
 
 # --- _segments_intersect: documented out-of-contract cases ---
 
@@ -320,6 +350,17 @@ def test_polygon_area_is_independent_of_starting_vertex(start_index):
     rolled = np.roll(square, -start_index, axis=0)
     assert _polygon_area(rolled) == pytest.approx(100.0)
 
+# --- _polygon_area: misleading values for self-intersecting polygons ---
+
+def test_polygon_area_of_symmetric_bowtie_is_zero():
+    """A symmetric bowtie yields area 0 via shoelace formula.
+
+    This is the mathematical premise for the short-circuit in
+    validate_quadrilateral. If this ever changes, the short-circuit
+    logic loses its justification and must be re-evaluated.
+    """
+    bowtie = np.array([[0, 0], [100, 100], [100, 0], [0, 100]], dtype=np.float64)
+    assert _polygon_area(bowtie) == pytest.approx(0.0)
 
 # --- _polygon_area: zero-area cases ---
 
@@ -729,6 +770,20 @@ def test_validate_rectangle_returns_empty_tuple():
     assert validate_quadrilateral(rect) == ()
 
 
+def test_validate_does_not_mutate_corners():
+    """validate_quadrilateral must be a pure function (no side effects).
+    
+    It should not modify the corners array in place. Using a non-trivial
+    input ensures that mutations (like zeroing out or sorting) are caught.
+    """
+    # Usamos un cuadrilátero válido pero con valores no triviales
+    corners = np.array([[10, 10], [90, 15], [85, 95], [15, 90]], dtype=np.float32)
+    original_corners = corners.copy()
+    
+    validate_quadrilateral(corners)
+    
+    np.testing.assert_array_equal(corners, original_corners)
+
 # --- validate_quadrilateral: shape validation is delegated ---
 
 def test_validate_rejects_non_array_with_type_error():
@@ -781,12 +836,42 @@ def test_collapsed_point_raises_degenerate_error():
         validate_quadrilateral(collapsed)
 
 
-def test_area_exactly_at_threshold_does_not_raise():
-    """Area == MIN_AREA_PX2 is not degenerate (strict <)."""
-    # Unit square: area = 1.0 exactly
+def test_validate_rejects_collinear_overlap_via_area():
+    """A quadrilateral with overlapping collinear sides is rejected by area.
+
+    _segments_intersect intentionally does not handle collinearity (out
+    of contract). The system relies on the area check to catch this
+    degenerate geometry as a fatal error.
+    """
+    collinear_overlap = np.array(
+        [[0, 0], [10, 0], [5, 0], [15, 0]],
+        dtype=np.float64,
+    )
+
+    # Premise: collinear overlap is NOT detected as self-intersection
+    # (_segments_intersect intentionally skips collinear cases).
+    assert _is_self_intersecting(collinear_overlap) is False, (
+        "_segments_intersect now handles collinearity. This changes the "
+        "design: re-evaluate whether the area check is still the right "
+        "safety net, or if validate_quadrilateral should be reordered."
+    )
+
+    # Consequence: the area check catches it as a fatal error.
+    with pytest.raises(DegenerateQuadrilateralError):
+        validate_quadrilateral(collinear_overlap)
+
+
+
+def test_at_area_threshold_returns_only_tiny_side():
+    """Area == MIN_AREA_PX2 is not degenerate (strict <), but TINY_SIDE applies.
+    
+    A unit square has area 1.0 (exactly the threshold) so it must NOT
+    raise DegenerateQuadrilateralError. However, its sides are 1 px
+    (well below MIN_SIDE_PX), so it MUST return exactly TINY_SIDE.
+    """
     unit = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float64)
-    # Does not raise; may return issues (tiny side) but that's fine
-    validate_quadrilateral(unit)  # should not raise
+    
+    assert validate_quadrilateral(unit) == (Issue.TINY_SIDE,)
 
 
 # --- validate_quadrilateral: EXTREME_ASPECT_RATIO ---
@@ -928,6 +1013,33 @@ def test_warp_returns_correct_shape():
     assert result.shape == (30, 50, 3)
 
 
+def test_warp_does_not_mutate_inputs():
+    """warp_to_rectangle must be a pure function (no side effects).
+    
+    It should not modify the original image or the corners array,
+    regardless of the dtype of the corners (which might trigger
+    a view instead of a copy internally).
+    
+    Note: We use a deterministic random image (seeded) instead of an
+    array of zeros. With zeros, mutations like image[:] = 0 would be
+    invisible and the test would pass vacuously.
+    """
+    rng = np.random.default_rng(seed=42)
+    image = rng.integers(0, 256, size=(100, 100, 3), dtype=np.uint8)
+    
+    corners = np.array([[0, 0], [99, 0], [99, 99], [0, 99]], dtype=np.float32)
+    
+    # Guardamos copias del estado original
+    original_image = image.copy()
+    original_corners = corners.copy()
+    
+    warp_to_rectangle(image, corners, 50, 50)
+    
+    # Verificamos que los originales no han cambiado
+    np.testing.assert_array_equal(image, original_image)
+    np.testing.assert_array_equal(corners, original_corners)
+
+
 def test_warp_preserves_uint8_dtype():
     """uint8 input produces uint8 output."""
     image = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -945,6 +1057,67 @@ def test_warp_accepts_integer_corner_dtype():
 
 
 # --- warp_to_rectangle: functional behavior ---
+
+@pytest.mark.parametrize("corners, description", [
+    pytest.param(
+        np.array([[10, 50], [30, 50], [50, 50], [70, 50]], dtype=np.float32),
+        "colineal (área ~0)",
+        id="colinear",
+    ),
+    pytest.param(
+        np.array([[10, 10], [90, 90], [90, 10], [10, 90]], dtype=np.float32),
+        "bowtie (auto-intersección)",
+        id="bowtie",
+    ),
+])
+def test_warp_does_not_raise_degenerate_error(corners, description):
+    """Atomic contract: warp_to_rectangle never raises DegenerateQuadrilateralError.
+
+    Whether OpenCV throws is a separate concern (see
+    test_warp_handles_bowtie_without_opencv_error).
+    """
+    image = np.zeros((100, 100, 3), dtype=np.uint8)
+
+    try:
+        warp_to_rectangle(image, corners, 50, 50)
+    except DegenerateQuadrilateralError:
+        pytest.fail(
+            f"warp_to_rectangle should not validate geometry ({description}); "
+            "that is validate_quadrilateral's responsibility."
+        )
+    except Exception:
+        pass  # Different contract — not this test's concern.
+
+
+def test_warp_is_deterministic():
+    """warp_to_rectangle must be deterministic.
+    
+    Given the same image and corners, two consecutive calls must
+    produce exactly the same output. This protects against hidden
+    state, caches, or accidental non-determinism (e.g., threading issues).
+    """
+    rng = np.random.default_rng(seed=123)
+    image = rng.integers(0, 256, size=(100, 100, 3), dtype=np.uint8)
+    corners = np.array([[10, 10], [90, 10], [90, 90], [10, 90]], dtype=np.float32)
+    
+    result1 = warp_to_rectangle(image, corners, 50, 50)
+    result2 = warp_to_rectangle(image, corners, 50, 50)
+    
+    np.testing.assert_array_equal(result1, result2)
+
+
+def test_warp_handles_bowtie_without_opencv_error():
+    """Separate contract: OpenCV accepts well-defined degenerate geometry (bowtie).
+
+    The colinear case is intentionally excluded: OpenCV's behavior on a
+    singular matrix is undefined and not part of warp_to_rectangle's contract.
+    """
+    image = np.zeros((100, 100, 3), dtype=np.uint8)
+    bowtie = np.array([[10, 10], [90, 90], [90, 10], [10, 90]], dtype=np.float32)
+
+    result = warp_to_rectangle(image, bowtie, 50, 50)
+    assert result.shape == (50, 50, 3)
+
 
 def test_warp_of_uniform_image_is_uniform():
     """A solid-color image produces a solid-color output in the interior."""
@@ -970,20 +1143,50 @@ def test_warp_with_identity_corners_preserves_interior_pattern():
 
 
 def test_warp_maps_source_corners_to_destination_corners():
-    """Markers at the four source corners land at the four destination corners."""
+    """Markers at the four source corners land at the four destination corners.
+
+    Uses distinct colors for each corner to detect permutation bugs
+    (e.g., TL mapped to TR). A single white marker would hide such bugs
+    because all corners would look the same.
+
+    Note: We use a large marker (31x31) so that, after downscaling to
+    the 100x100 destination, the marker region is large enough to avoid
+    Lanczos interpolation bleeding from the black background.
+    """
     image = np.zeros((200, 200, 3), dtype=np.uint8)
-    # Place 11x11 white markers centered on the four corners of the source quad
-    marker_half = 5
+    marker_half = 15  # 31x31 markers for robust sampling after warp
     source_corners = [(20, 20), (179, 20), (179, 179), (20, 179)]
-    for cx, cy in source_corners:
+    colors = [
+        (255, 0, 0),    # TL: Azul (BGR)
+        (0, 255, 0),    # TR: Verde
+        (0, 0, 255),    # BR: Rojo
+        (255, 255, 0),  # BL: Cian (azul + verde)
+    ]
+    for (cx, cy), color in zip(source_corners, colors):
         image[cy - marker_half:cy + marker_half + 1,
-              cx - marker_half:cx + marker_half + 1] = 255
+              cx - marker_half:cx + marker_half + 1] = color
 
     corners = np.array(source_corners, dtype=np.float32)
     result = warp_to_rectangle(image, corners, 100, 100)
 
-    # Each corner region of the output should contain the bright marker
-    assert result[:15, :15].max() > 200       # top-left
-    assert result[:15, -15:].max() > 200      # top-right
-    assert result[-15:, :15].max() > 200      # bottom-left
-    assert result[-15:, -15:].max() > 200     # bottom-right
+    # Verificamos una región de 5x5 desde la esquina.
+    # Como el marcador en destino mide ~10x10, esta región es interior y segura.
+    tl_region = result[0:5, 0:5]
+    assert tl_region[:, :, 0].max() > 200  # B
+    assert tl_region[:, :, 1].max() < 50   # G
+    assert tl_region[:, :, 2].max() < 50   # R
+
+    tr_region = result[0:5, -5:]
+    assert tr_region[:, :, 1].max() > 200  # G
+    assert tr_region[:, :, 0].max() < 50   # B
+    assert tr_region[:, :, 2].max() < 50   # R
+
+    br_region = result[-5:, -5:]
+    assert br_region[:, :, 2].max() > 200  # R
+    assert br_region[:, :, 0].max() < 50   # B
+    assert br_region[:, :, 1].max() < 50   # G
+
+    bl_region = result[-5:, 0:5]
+    assert bl_region[:, :, 0].max() > 200  # B
+    assert bl_region[:, :, 1].max() > 200  # G
+    assert bl_region[:, :, 2].max() < 50   # R
