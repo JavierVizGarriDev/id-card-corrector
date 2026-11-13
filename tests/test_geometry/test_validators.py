@@ -1,12 +1,65 @@
 import numpy as np
 import pytest
+import math
 from id_card_corrector.geometry import (
     _check_corners_shape,
     validate_quadrilateral,
     _is_self_intersecting,
     DegenerateQuadrilateralError,
     Issue,
+    MAX_ASPECT_RATIO,  
+    MIN_SIDE_PX,      
+    MIN_AREA_PX2,
 )
+
+
+# --- Module invariants ---
+
+def test_all_validation_constants_are_integers():
+    """All validation constants must be integer-valued.
+
+    Pixels are atomic units: MIN_SIDE_PX and MIN_AREA_PX2 are naturally
+    integers. MAX_ASPECT_RATIO is a ratio, but we enforce integer values
+    by convention so that boundary tests can construct exact boundaries.
+    """
+    assert MIN_AREA_PX2 == int(MIN_AREA_PX2), (
+        f"MIN_AREA_PX2 must be integer-valued, got {MIN_AREA_PX2}"
+    )
+    assert MIN_SIDE_PX == int(MIN_SIDE_PX), (
+        f"MIN_SIDE_PX must be integer-valued, got {MIN_SIDE_PX}"
+    )
+    assert MAX_ASPECT_RATIO == int(MAX_ASPECT_RATIO), (
+        f"MAX_ASPECT_RATIO must be integer-valued, got {MAX_ASPECT_RATIO}"
+    )
+
+
+def test_min_side_px_is_at_least_two():
+    """MIN_SIDE_PX must be >= 2 to allow testing "clearly below minimum".
+
+    If MIN_SIDE_PX were 1, the test "tiny_side_alone" would construct a
+    side of int(1 * 0.5) = 0, which collapses the quadrilateral to zero
+    area (triggering DegenerateQuadrilateralError instead of TINY_SIDE).
+    """
+    assert MIN_SIDE_PX >= 2, (
+        f"MIN_SIDE_PX must be >= 2 to avoid degenerate test geometry, "
+        f"got {MIN_SIDE_PX}"
+    )
+
+
+def test_area_to_ratio_relationship():
+    """MIN_AREA_PX2 must be <= MAX_ASPECT_RATIO for threshold tests.
+
+    The test test_at_area_threshold_returns_only_tiny_side constructs a
+    rectangle of width 1 and height MIN_AREA_PX2. Its aspect ratio is
+    MIN_AREA_PX2 / 1 = MIN_AREA_PX2. If this exceeds MAX_ASPECT_RATIO,
+    the test would trigger EXTREME_ASPECT_RATIO instead of just TINY_SIDE.
+    """
+    assert MIN_AREA_PX2 <= MAX_ASPECT_RATIO, (
+        f"MIN_AREA_PX2 ({MIN_AREA_PX2}) must be <= MAX_ASPECT_RATIO "
+        f"({MAX_ASPECT_RATIO}) to avoid triggering EXTREME_ASPECT_RATIO "
+        f"in the area threshold test."
+    )
+
 
 # --- _check_corners_shape: happy path ---
 
@@ -73,7 +126,6 @@ def test_check_corners_shape_ignores_numeric_values():
         [0, 10],
     ], dtype=np.float32)
     _check_corners_shape(corners)  # should not raise
-
 
 
 # --- validate_quadrilateral: happy path ---
@@ -144,7 +196,10 @@ def test_concave_quadrilateral_is_not_flagged_as_self_intersecting():
 
 def test_tiny_square_raises_degenerate_error():
     """Area below MIN_AREA_PX2 raises DegenerateQuadrilateralError."""
-    tiny = np.array([[0, 0], [0.5, 0], [0.5, 0.5], [0, 0.5]], dtype=np.float64)
+    # Construimos un cuadrado cuya área sea exactamente la mitad del mínimo.
+    # El float epsilon de sqrt es seguro aquí porque estamos muy por debajo del umbral.
+    side = math.sqrt(MIN_AREA_PX2 * 0.5)
+    tiny = np.array([[0, 0], [side, 0], [side, side], [0, side]], dtype=np.float64)
     with pytest.raises(DegenerateQuadrilateralError):
         validate_quadrilateral(tiny)
 
@@ -169,7 +224,6 @@ def test_validate_rejects_collinear_overlap_via_area():
     )
 
     # Premise: collinear overlap is NOT detected as self-intersection
-    # (_segments_intersect intentionally skips collinear cases).
     assert _is_self_intersecting(collinear_overlap) is False, (
         "_segments_intersect now handles collinearity. This changes the "
         "design: re-evaluate whether the area check is still the right "
@@ -181,76 +235,125 @@ def test_validate_rejects_collinear_overlap_via_area():
         validate_quadrilateral(collinear_overlap)
 
 
-
 def test_at_area_threshold_returns_only_tiny_side():
     """Area == MIN_AREA_PX2 is not degenerate (strict <), but TINY_SIDE applies.
     
-    A unit square has area 1.0 (exactly the threshold) so it must NOT
-    raise DegenerateQuadrilateralError. However, its sides are 1 px
-    (well below MIN_SIDE_PX), so it MUST return exactly TINY_SIDE.
+    We construct a rectangle of width 1 and height MIN_AREA_PX2.
+    Since MIN_SIDE_PX >= 2 (invariant), the side of 1 always triggers TINY_SIDE.
+    The aspect ratio is MIN_AREA_PX2 / 1 = MIN_AREA_PX2, which is guaranteed
+    to be <= MAX_ASPECT_RATIO by the invariant test_area_to_ratio_relationship.
     """
-    unit = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float64)
+    width = 1
+    height = int(MIN_AREA_PX2)
     
-    assert validate_quadrilateral(unit) == (Issue.TINY_SIDE,)
+    quad = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float64)
+    
+    assert validate_quadrilateral(quad) == (Issue.TINY_SIDE,)
 
 
 # --- validate_quadrilateral: EXTREME_ASPECT_RATIO ---
 
 def test_extreme_aspect_ratio_alone():
-    """A thin but long quadrilateral only reports EXTREME_ASPECT_RATIO."""
-    # 221 x 11: ratio = 221/11 ≈ 20.09 > 20, min side = 11 >= 10
-    thin = np.array([[0, 0], [221, 0], [221, 11], [0, 11]], dtype=np.float64)
+    """A thin but long quadrilateral only reports EXTREME_ASPECT_RATIO.
+
+    Assumes MIN_SIDE_PX is an integer (pixels are atomic units).
+    """
+    height = int(MIN_SIDE_PX * 1.1)  # Just above the minimum
+    width = int(MAX_ASPECT_RATIO * height * 2)  # Double the allowed ratio
+    thin = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float64)
     assert validate_quadrilateral(thin) == (Issue.EXTREME_ASPECT_RATIO,)
 
 
 def test_aspect_ratio_just_above_threshold():
-    """Ratio marginally above 20 triggers the issue."""
-    # 201 x 10: ratio = 20.1 > 20, min side = 10 (no TINY_SIDE)
-    thin = np.array([[0, 0], [201, 0], [201, 10], [0, 10]], dtype=np.float64)
+    """Ratio marginally above the threshold triggers the issue.
+
+    Assumes MIN_SIDE_PX is an integer. The +1 guarantees width > ratio * height,
+    so the ratio is strictly greater than MAX_ASPECT_RATIO.
+    """
+    height = int(MIN_SIDE_PX * 1.1)
+    width = int(MAX_ASPECT_RATIO * height) + 1
+    thin = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float64)
     assert validate_quadrilateral(thin) == (Issue.EXTREME_ASPECT_RATIO,)
 
 
 def test_aspect_ratio_exactly_at_threshold_does_not_trigger():
-    """Ratio == MAX_ASPECT_RATIO does not trigger the issue (strict >)."""
-    # 200 x 10: ratio = 20 exactly, min side = 10
-    rect = np.array([[0, 0], [200, 0], [200, 10], [0, 10]], dtype=np.float64)
+    """Ratio == MAX_ASPECT_RATIO does not trigger the issue (strict >).
+
+    Requires MAX_ASPECT_RATIO * height to be an integer so the actual
+    ratio is exactly MAX_ASPECT_RATIO. This is guaranteed by the
+    invariant "all validation constants are integer-valued"
+    (enforced by test_all_validation_constants_are_integers).
+    """
+    height = int(MIN_SIDE_PX * 1.1)
+    width = int(MAX_ASPECT_RATIO * height)  # Exactly at the threshold
+    rect = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float64)
     assert validate_quadrilateral(rect) == ()
 
 
 def test_aspect_ratio_below_threshold_does_not_trigger():
-    """Ratio below 20 is fine."""
-    rect = np.array([[0, 0], [150, 0], [150, 10], [0, 10]], dtype=np.float64)
+    """Ratio below the threshold is fine."""
+    height = int(MIN_SIDE_PX * 1.1)
+    width = int(MAX_ASPECT_RATIO * height * 0.8)  # 20% below
+    rect = np.array([[0, 0], [width, 0], [width, height], [0, height]], dtype=np.float64)
     assert validate_quadrilateral(rect) == ()
 
 
 # --- validate_quadrilateral: TINY_SIDE ---
 
 def test_tiny_side_alone():
-    """A short side triggers TINY_SIDE without aspect ratio issue."""
-    # 100 x 5: ratio = 20 (no EXTREME), min side = 5 < 10
-    quad = np.array([[0, 0], [100, 0], [100, 5], [0, 5]], dtype=np.float64)
+    """A short side triggers TINY_SIDE without aspect ratio issue.
+    
+    Uses a side 50% below MIN_SIDE_PX. Width is chosen so the ratio
+    stays well below MAX_ASPECT_RATIO (to avoid EXTREME_ASPECT_RATIO).
+    """
+    short_side = int(MIN_SIDE_PX * 0.5) 
+    width = int(MAX_ASPECT_RATIO * short_side * 0.25)
+    
+    quad = np.array([[0, 0], [width, 0], [width, short_side], [0, short_side]], dtype=np.float64)
     assert validate_quadrilateral(quad) == (Issue.TINY_SIDE,)
 
 
 def test_tiny_side_just_below_threshold():
-    """Min side marginally below 10 triggers TINY_SIDE."""
-    quad = np.array([[0, 0], [100, 0], [100, 9.99], [0, 9.99]], dtype=np.float64)
+    """Min side exactly 1 pixel below threshold triggers TINY_SIDE."""
+    # Restamos 1 píxel (respetando la invariante de enteros)
+    short_side = MIN_SIDE_PX - 1
+    
+    # Ancho derivado de MAX_ASPECT_RATIO para evitar EXTREME_ASPECT_RATIO
+    width = int(MAX_ASPECT_RATIO * short_side * 0.5)
+    
+    quad = np.array([[0, 0], [width, 0], [width, short_side], [0, short_side]], dtype=np.float64)
     assert validate_quadrilateral(quad) == (Issue.TINY_SIDE,)
 
 
 def test_min_side_exactly_at_threshold_does_not_trigger():
     """Min side == MIN_SIDE_PX does not trigger (strict <)."""
-    quad = np.array([[0, 0], [100, 0], [100, 10], [0, 10]], dtype=np.float64)
-    # ratio = 10 (no EXTREME), min side = 10 (no TINY)
+    # Ancho derivado de MAX_ASPECT_RATIO (consistente con los otros tests)
+    width = int(MIN_SIDE_PX * MAX_ASPECT_RATIO * 0.5)
+    
+    quad = np.array([[0, 0], [width, 0], [width, MIN_SIDE_PX], [0, MIN_SIDE_PX]], dtype=np.float64)
     assert validate_quadrilateral(quad) == ()
 
 
 # --- validate_quadrilateral: combined issues ---
 
+def _build_combined_issues_quad():
+    """Helper to build a quad that triggers both EXTREME_ASPECT_RATIO and TINY_SIDE.
+    
+    The short side is guaranteed to be below MIN_SIDE_PX (to trigger TINY_SIDE).
+    The long side is guaranteed to be above MAX_ASPECT_RATIO * short_side
+    (to trigger EXTREME_ASPECT_RATIO), while keeping the long side integer.
+    """
+    
+    # La invariante MIN_SIDE_PX >= 2 garantiza que int(MIN * 0.5) >= 1
+    short_side = int(MIN_SIDE_PX * 0.5)
+    # +1 es el mínimo matemático para garantizar que la ratio sea estrictamente mayor
+    long_side = int(MAX_ASPECT_RATIO * short_side) + 1
+    return np.array([[0, 0], [long_side, 0], [long_side, short_side], [0, short_side]], dtype=np.float64)
+
+
 def test_extreme_aspect_ratio_and_tiny_side_together():
     """Both non-fatal issues are reported together."""
-    # 1000 x 5: ratio = 200 > 20, min side = 5 < 10
-    quad = np.array([[0, 0], [1000, 0], [1000, 5], [0, 5]], dtype=np.float64)
+    quad = _build_combined_issues_quad()
     assert validate_quadrilateral(quad) == (
         Issue.EXTREME_ASPECT_RATIO,
         Issue.TINY_SIDE,
@@ -259,7 +362,7 @@ def test_extreme_aspect_ratio_and_tiny_side_together():
 
 def test_combined_issues_preserve_order():
     """Issue order in the tuple matches the order of checks in the function."""
-    quad = np.array([[0, 0], [1000, 0], [1000, 5], [0, 5]], dtype=np.float64)
+    quad = _build_combined_issues_quad()
     result = validate_quadrilateral(quad)
     assert result[0] is Issue.EXTREME_ASPECT_RATIO
     assert result[1] is Issue.TINY_SIDE
@@ -276,6 +379,8 @@ def test_validate_returns_tuple():
 
 def test_validate_returns_tuple_of_issue_members():
     """Every element in the result is an Issue member."""
-    quad = np.array([[0, 0], [1000, 0], [1000, 5], [0, 5]], dtype=np.float64)
+    quad = _build_combined_issues_quad()
     result = validate_quadrilateral(quad)
+    # Evita que el test pase en vacuo si el helper devuelve una tupla vacía
+    assert len(result) > 0, "Helper produced no issues; test would be vacuous"
     assert all(isinstance(item, Issue) for item in result)
