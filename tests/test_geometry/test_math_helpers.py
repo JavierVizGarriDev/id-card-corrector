@@ -502,10 +502,18 @@ def test_min_side_length_is_zero_when_all_vertices_coincide():
 
 # --- _min_side_length: consistency with _side_lengths ---
 
-def test_min_side_length_matches_min_of_side_lengths():
-    """The value equals the minimum of _side_lengths."""
+def test_min_side_length_of_irregular_quadrilateral():
+    """A quad with 4 distinct side lengths returns the shortest one.
+    
+    Using a shape with 4 different sides (3, √20, √26, 5) ensures that
+    the function is truly finding the minimum, not accidentally returning
+    the first or last element of the lengths array.
+    """
     quad = np.array([[0, 0], [3, 0], [5, 4], [0, 5]], dtype=np.float64)
-    assert _min_side_length(quad) == pytest.approx(_side_lengths(quad).min())
+    # Side lengths: P0->P1 = 3, P1->P2 = √20 ≈ 4.47,
+    # P2->P3 = √26 ≈ 5.10, P3->P0 = 5.
+    # The minimum is exactly 3.0.
+    assert _min_side_length(quad) == pytest.approx(3.0)
 
 
 # --- _min_side_length: return type ---

@@ -351,22 +351,16 @@ def _build_combined_issues_quad():
     return np.array([[0, 0], [long_side, 0], [long_side, short_side], [0, short_side]], dtype=np.float64)
 
 
-def test_extreme_aspect_ratio_and_tiny_side_together():
-    """Both non-fatal issues are reported together."""
-    quad = _build_combined_issues_quad()
-    assert validate_quadrilateral(quad) == (
-        Issue.EXTREME_ASPECT_RATIO,
-        Issue.TINY_SIDE,
-    )
-
-
-def test_combined_issues_preserve_order():
-    """Issue order in the tuple matches the order of checks in the function."""
+def test_combined_issues_have_correct_composition_and_order():
+    """Both non-fatal issues are reported, in the correct order.
+    
+    Tuple equality in Python implies order: (A, B) == (A, B) but
+    (A, B) != (B, A). So this single assertion covers both composition
+    (which issues appear) and order (EXTREME before TINY).
+    """
     quad = _build_combined_issues_quad()
     result = validate_quadrilateral(quad)
-    assert result[0] is Issue.EXTREME_ASPECT_RATIO
-    assert result[1] is Issue.TINY_SIDE
-
+    assert result == (Issue.EXTREME_ASPECT_RATIO, Issue.TINY_SIDE)
 
 # --- validate_quadrilateral: return type ---
 
